@@ -1,0 +1,93 @@
+build/
+bin/
+obj/
+*.log
+*.opendb
+*.VC.db
+/.vscode/
+/.idea/
+/.vs/
+third_party/
+# General
+.DS_Store
+Thumbs.db
+*.log
+
+# Build artifacts
+/build/
+/build/**
+/out/
+bin/
+obj/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.lo
+*.lai
+
+# CMake
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/*.vcxproj*
+/*.sln
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.user
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Flutter / Dart
+.dart_tool/
+/.packages
+/.flutter-plugins
+/.flutter-plugins-dependencies
+pubspec.lock
+build/**
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# Android
+**/android/**/build/
+**/build/
+local.properties
+.gradle/
+*.keystore
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+env/
+ENV/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Misc
+*.swp
+*.swo
+.openssl-licenses
