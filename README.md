@@ -1,60 +1,68 @@
-# fero — scalable repo skeleton with C++ core and Flutter FFI binding
+# Fero
 
-This repository demonstrates a scalable folder layout (inspired by large projects
-such as TensorFlow and OpenCV) and contains a tiny C++ core library that exposes
-a simple function returning numbers 1..10. A Flutter package in `bindings/flutter`
-provides a Dart FFI wrapper and an example Flutter app that calls the native library.
+Fero is a workspace containing a Rust `core` crate that implements sync primitives and a set of language bindings and example apps (Flutter, Next.js, Python). The repository is organized as a workspace to make it easy to build the core library and provide bindings for multiple platforms.
 
-Structure (important parts):
+Contents
 
-- `core/` — C++ core library (headers, sources, CMake)
-- `bindings/flutter/` — Flutter package that calls the native library via FFI
-- `bindings/...` — placeholder for other language/platform bindings (web, node, android, ios, etc.)
-- `third_party/`, `tools/`, `docs/`, `examples/` — places for growth
+- `core/` - Primary Rust crate containing the sync engine, traits, implementations, FFI surface, and tests.
+- `bindings/` - Language-specific binding glue (Flutter, Next.js, Python).
+- `examples/` - Small example projects demonstrating how to use the core crate via bindings.
+- `tests/` - Integration and unit test helpers outside crates.
+- `docs/` - Project documentation and design notes.
 
-Build the native library (examples)
+Getting started
 
-Windows (PowerShell, using MSVC and CMake):
+Prerequisites
 
-```powershell
-mkdir build; cd build
-cmake -G "Visual Studio 16 2019" ..
-cmake --build . --config Release
-```
+- Rust toolchain (stable) installed: https://rustup.rs
+- `cargo` on PATH
 
-The produced shared library will be placed in `build/lib/` (e.g. `core_native.dll`).
-
-Linux (g++ + CMake):
+Build the core crate
 
 ```bash
-mkdir build; cd build
-cmake ..
-cmake --build .
+cd core
+cargo build
 ```
 
-Or compile quickly without CMake (Linux/macOS):
+Run tests
 
 ```bash
-g++ -shared -fPIC -o libcore_native.so core/src/core.cpp -Icore/include
+cd core
+cargo test
 ```
 
-Or on Windows with MinGW (quick):
+Workspace build (from repository root)
 
-```powershell
-g++ -shared -o core_native.dll core/src/core.cpp -Icore/include -Wl,--out-implib,libcore_native.a
+```bash
+cargo build --workspace
 ```
 
-Using the Flutter example
+Development notes
 
-- Build the native library for your target platform and place the produced shared library
-  next to the Flutter executable or in the runner's expected library search path.
-- From `bindings/flutter/example`, run `flutter pub get` and then `flutter run` (target your
-  desired platform). The example app will attempt to load `core_native.dll` (Windows),
-  `libcore_native.so` (Linux), or `libcore_native.dylib` (macOS).
+- The `core` crate follows a modular layout under `core/src/` with clear separation:
+  - `traits/` — trait definitions for sync, network, storage, etc.
+  - `sync/` — synchronization engine, incremental and initial sync logic, conflict resolution and backoff strategies.
+  - `impls/` — concrete implementations wiring traits together.
+  - `types/` — enums and constants used across the crate.
+  - `ffi/` — C-compatible entry points consumed by language bindings.
 
-Notes and next steps
+- Bindings live in `bindings/` and are intentionally lightweight placeholders for now. Each binding should expose a stable FFI or generated wrapper that consumes `core`'s `ffi` module.
 
-- This is a minimal example focused on demonstrating the pattern. For production:
-  - Add proper symbol export/visibility controls for each platform.
-  - Add CI build scripts to produce platform-specific binaries and to publish bindings.
-  - Add more bindings (e.g., Node, WebAssembly, Android NDK `.so`, iOS `.framework`).
+Examples
+
+- `examples/flutter_example/` — placeholder for Flutter integration.
+- `examples/nextjs_example/` — placeholder for Next.js (Node) integration.
+- `examples/python_example/` — placeholder for Python integration.
+
+Contributing
+
+- Add well-scoped changes with tests.
+- Keep design documents or API changes in `docs/`.
+
+License
+
+This project does not include a license file yet. Add a `LICENSE` at the repository root to make the licensing explicit.
+
+Contact
+
+Open issues or PRs for questions or contributions.
