@@ -21,3 +21,23 @@ foreach ($t in $targets) {
 cargo ndk -t armeabi-v7a -t arm64-v8a -t x86 -t x86_64 -o .\build\androidLibs build --release
 
 Write-Host "Build finished. .so files are in .\build\androidLibs\<ABI>\"
+
+# 4. Copy .so files to Flutter bindings
+$abiMap = @{
+    "armeabi-v7a" = "armeabi-v7a"
+    "arm64-v8a"   = "arm64-v8a"
+    "x86"         = "x86"
+    "x86_64"      = "x86_64"
+}
+
+$flutterLibsDir = "..\bindings\flutter\android\app\src\main\jniLibs"
+
+foreach ($abi in $abiMap.Keys) {
+    $src = ".\build\androidLibs\$abi\*.so"
+    $dest = Join-Path $flutterLibsDir $abi
+    if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+    Copy-Item $src -Destination $dest -Force
+    Write-Host "Copied $abi .so files to $dest"
+}
+
+Write-Host "All .so files copied to Flutter bindings."
