@@ -1,3 +1,4 @@
+pub mod exceptions;
 pub mod sync_traits;
 pub mod network_traits;
 pub mod storage_traits;

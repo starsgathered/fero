@@ -1,7 +1,6 @@
+pub mod domain;
 pub mod traits;
-pub mod sync;
-pub mod impls;
-pub mod types;
+pub mod modules;
 pub mod ffi;
-
-// Core library root. Implementations live in the submodules.
+pub mod types;
+pub mod common;

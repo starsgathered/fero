@@ -14,7 +14,8 @@ Thumbs.db
 *.log
 
 # Build artifacts
-core/target
+/core/target
+/target
 /build/
 /build/**
 /out/

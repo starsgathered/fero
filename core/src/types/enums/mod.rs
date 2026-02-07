@@ -1,6 +1,3 @@
 // Enums used across the crate
 
-pub enum SyncState {
-    Idle,
-    Running,
-}
+pub mod initial_sync_status;

@@ -1,3 +1,6 @@
+[workspace]
+resolver = "2"
+
 [package]
 name = "core"
 version = "0.1.0"
@@ -6,5 +9,8 @@ edition = "2021"
 [lib]
 name = "core"
 path = "src/lib.rs"
+crate-type = ["cdylib"]
 
 [dependencies]
+async-trait = "0.1"
+chrono = "0.4"
