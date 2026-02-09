@@ -1,121 +1,140 @@
 // initial_sync_manager.dart
 
 import 'dart:ffi';
-
+import 'package:ffi/ffi.dart';
 import 'package:fero/backoff.dart';
 import 'package:fero/sync_handler.dart';
 import 'package:fero/sync_item.dart';
 import 'package:fero/sync_meta_data_repository.dart';
 import 'package:fero/sync_result.dart';
-import 'package:ffi/ffi.dart';
 
-typedef CallRustNative =
-    Void Function(
-      Pointer<Void> handlerId,
-      Pointer<Utf8> userId,
-      // Uint8 backoffType,
-      // Uint64 baseMillis,
-      // Uint64 maxMillis,
-    );
+/// ---------------- Native Library ----------------
+final DynamicLibrary dylib = DynamicLibrary.open("libcore.so");
 
-typedef CallRustDart =
-    void Function(
-      Pointer<Void> handlerId,
-      Pointer<Utf8> userId,
-      // int backoffType,
-      // int baseMillis,
-      // int maxMillis,
-    );
-typedef ReportResultNative = Void Function(Uint64 handlerId, Uint8 success);
-typedef ReportResultDart = void Function(int handlerId, int success);
-final dylib = DynamicLibrary.open("libcore.so");
-final reportResultToRust = dylib
-    .lookupFunction<ReportResultNative, ReportResultDart>('report_sync_result');
-final callRust = dylib.lookupFunction<CallRustNative, CallRustDart>(
-  'call_rust',
-);
+/// Rust callback typedefs
+typedef RustCallbackNative = Void Function(Int32);
+typedef RegisterCallbackNativeC =
+    Void Function(Pointer<NativeFunction<RustCallbackNative>>);
+typedef RegisterCallbackNativeDart =
+    void Function(Pointer<NativeFunction<RustCallbackNative>>);
 
+final RegisterCallbackNativeDart registerCallback =
+    dylib
+        .lookup<NativeFunction<RegisterCallbackNativeC>>('call_dart')
+        .asFunction();
+
+// Rust function: void rust_generate_numbers()
+typedef RustGenerateNumbersC = Void Function();
+typedef RustGenerateNumbersDart = void Function();
+
+final RustGenerateNumbersDart rustGenerateNumbers =
+    dylib
+        .lookup<NativeFunction<RustGenerateNumbersC>>('rust_generate_numbers')
+        .asFunction();
+
+/// ---------------- Singleton Reference ----------------
+InitialSyncManager? _singletonInstance;
+
+/// Top-level function for Rust FFI
+void _rustCallbackStatic(int number) {
+  _singletonInstance?._handleRustNumber(number);
+}
+
+/// ---------------- InitialSyncManager ----------------
 class InitialSyncManager {
-  final SyncMetadataRepository syncMetadataRepository;
+  final SyncMetadataRepository _syncMetadataRepository;
   final Map<String, SyncHandler> _handlers;
-  final BackoffStrategy backoffStrategy;
+  final BackoffStrategy _backoffStrategy;
 
-  InitialSyncManager({
-    required this.syncMetadataRepository,
+  // Singleton instance accessor
+  static InitialSyncManager? get instance => _singletonInstance;
+
+  /// Private constructor
+  InitialSyncManager._(
+    this._syncMetadataRepository,
+    this._handlers,
+    this._backoffStrategy,
+  ) {
+    _singletonInstance = this;
+    _registerRustCallback();
+    // 3. Call Rust to generate numbers
+    rustGenerateNumbers();
+  }
+
+  /// Factory constructor for singleton
+  factory InitialSyncManager({
+    required SyncMetadataRepository syncMetadataRepository,
     required Map<String, SyncHandler> handlers,
-    required this.backoffStrategy,
-  }) : _handlers = handlers;
+    required BackoffStrategy backoffStrategy,
+  }) {
+    return _singletonInstance ??
+        InitialSyncManager._(syncMetadataRepository, handlers, backoffStrategy);
+  }
 
-  /// Run sync for all registered features for a user
+  /// ---------------- Rust Callback Registration ----------------
+  void _registerRustCallback() {
+    final pointer = Pointer.fromFunction<RustCallbackNative>(
+      _rustCallbackStatic, // ✅ top-level static function
+    );
+    registerCallback(pointer); // Only register once
+  }
+
+  /// ---------------- Handle Rust callback ----------------
+  void _handleRustNumber(int number) {
+    print("⚡ Flutter received number from Rust: $number");
+
+    // Optional: route number to specific handler logic here
+  }
+
+  /// ---------------- Trigger from Rust with handlerId ----------------
+  void triggerFromRust(Pointer<Utf8> handlerId, Pointer<Utf8> userId) async {
+    final featureKey = handlerId.toDartString();
+    final user = userId.toDartString();
+
+    final item = SyncItem(userId: user, featureKey: featureKey);
+    final result = await executeHandler(item);
+
+    if (result.success) {
+      await _syncMetadataRepository.updateSyncTime(
+        userId: user,
+        featureKey: featureKey,
+        syncTime: DateTime.now(),
+      );
+    }
+  }
+
+  /// ---------------- Execute Handler ----------------
+  Future<SyncResult> executeHandler(SyncItem item) async {
+    final handler = _handlers[item.featureKey];
+    if (handler == null) return SyncResult.failure();
+
+    try {
+      return await handler.handle(item);
+    } catch (_) {
+      return SyncResult.failure();
+    }
+  }
+
+  /// ---------------- Run Sync ----------------
   Future<void> runSync(String userId) async {
     for (final entry in _handlers.entries) {
       final featureKey = entry.key;
 
-      final required = await syncMetadataRepository.isSyncRequired(
+      final required = await _syncMetadataRepository.isSyncRequired(
         userId: userId,
         featureKey: featureKey,
       );
 
-      if (required) {
-        print('[SDK] Sync required for $featureKey');
+      if (!required) continue;
 
-        // Instead of directly calling Dart, trigger Rust
-        final handlerId = Pointer<Void>.fromAddress(
-          featureKey.hashCode,
-        ); // Use usize, not Utf8
-        final userIdPtr = userId.toNativeUtf8();
+      final handlerPtr = featureKey.toNativeUtf8();
+      final userPtr = userId.toNativeUtf8();
 
-        callRust(
-          handlerId,
-          userIdPtr,
-          // backoffStrategy.type,
-          // backoffStrategy.baseMillis,
-          // backoffStrategy.maxMillis,
-        );
+      // TODO: call Rust function if needed
+      // callRust(handlerPtr, userPtr, ...);
 
-        calloc.free(userIdPtr); // free userId only
-      } else {
-        print('[SDK] $featureKey is already up-to-date');
-      }
-    }
-  }
-
-  void triggerFromRust(Pointer<Void> handlerId, Pointer<Utf8> userId) {
-    final featureKey = handlerId.address.toString();
-    final userIdStr = userId.toDartString();
-
-    final item = SyncItem(userId: userIdStr, featureKey: featureKey);
-
-    // Execute Dart handler and report back to Rust
-    executeHandler(item)
-        .then((result) async {
-          reportResultToRust(handlerId.address, result.success ? 1 : 0);
-          await syncMetadataRepository.updateSyncTime(
-            userId: userIdStr,
-            featureKey: featureKey,
-            syncTime: DateTime.now(),
-          );
-        })
-        .catchError((_) {
-          reportResultToRust(handlerId.address, 0);
-        });
-  }
-
-  /// Called by Rust when it wants to execute a handler
-  Future<SyncResult> executeHandler(SyncItem item) async {
-    final handler = _handlers[item.featureKey];
-    if (handler == null) {
-      throw Exception("Something went wrong");
-    }
-
-    final syncItem = SyncItem(
-      userId: item.userId,
-      featureKey: item.featureKey,
-    ); // Rust can pass feature if needed
-    try {
-      return await handler.handle(syncItem);
-    } catch (e) {
-      return SyncResult.failure();
+      calloc.free(handlerPtr);
+      calloc.free(userPtr);
     }
   }
 }
