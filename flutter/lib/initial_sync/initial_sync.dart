@@ -59,9 +59,10 @@ class InitialSyncManager implements InitialSyncService {
     _setStatus(InitialSyncStatus.running);
 
     try {
-      final already = await areSyncRequired(userId, featureKeys);
-      final allSynced = featureKeys.every((key) => already[key] == true);
-      if (allSynced) {
+      final needsSync = await areSyncRequired(userId, featureKeys);
+
+      // skip if no features need syncing
+      if (featureKeys.every((key) => !needsSync[key]!)) {
         _setStatus(InitialSyncStatus.completed);
         return;
       }
