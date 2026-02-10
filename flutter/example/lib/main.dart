@@ -3,7 +3,6 @@ import 'package:fero_sync/core/backoff.dart';
 import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/core/sync_item.dart';
 import 'package:fero_sync/core/sync_result.dart';
-import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
 
 /// Example feature handlers
@@ -38,24 +37,19 @@ Future<void> main() async {
   // --- Backoff Strategy ---
   final backoffStrategy = FixedBackoffStrategy(baseMillis: 500);
 
-  // --- Initial Sync Manager ---
-  final initialSync = InitialSyncManager(
-    metadataRepo: metadataRepo,
+  // --- Sync Coordinator (creates InitialSyncManager internally) ---
+  final coordinator = FeroCoordinator(
     handlers: handlers,
+    syncMetadataRepository: metadataRepo,
     backoffStrategy: backoffStrategy,
+    minInterval: Duration(seconds: 5),
   );
 
-  // --- Sync Coordinator Manager ---
-  final coordinator = FeroCoordinator(
-    initialManager: initialSync,
-    syncMetadataRepository: metadataRepo,
-  );
+  // --- Listen to Initial Sync Status ---
+  coordinator.initialManager.statusStream.listen((status) {
+    print('Initial Sync Status: $status');
+  });
 
   // --- Run full sync flow ---
   await coordinator.runInitialIfNeeded('user_123', ['contacts', 'messages']);
-
-  // Listen to initial sync status
-  initialSync.statusStream.listen((status) {
-    print('Initial Sync Status: $status');
-  });
 }

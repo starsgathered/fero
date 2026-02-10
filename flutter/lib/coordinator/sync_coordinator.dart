@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:fero_sync/core/backoff.dart';
+import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
 
@@ -7,17 +9,29 @@ import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
 /// and exposes control operations. Keep logic minimal; composition and
 /// policies can be extended without changing this class.
 class FeroCoordinator {
-  final InitialSyncManager initialManager;
+  late final InitialSyncManager initialManager;
   final SyncMetadataRepository syncMetadataRepository;
+  final BackoffStrategy backoffStrategy;
 
   final Duration minInterval;
   final Map<String, DateTime> _lastRun = {};
+  final Map<String, SyncHandler> handlers;
 
   FeroCoordinator({
-    required this.initialManager,
+    required this.handlers,
     required this.syncMetadataRepository,
+    BackoffStrategy? backoffStrategy,
     this.minInterval = const Duration(minutes: 5),
-  });
+  }) : backoffStrategy = backoffStrategy ??
+            ExponentialBackoffStrategy(baseMillis: 1000, maxMillis: 30000) {
+    // Pass the backoffStrategy to initialManager
+    initialManager = InitialSyncManager(
+      handlers: handlers,
+      metadataRepo: syncMetadataRepository,
+      backoffStrategy: this.backoffStrategy,
+      maxRetries: 5,
+    );
+  }
 
   Future<void> triggerForUser(String userId) async {
     final now = DateTime.now().toUtc();
