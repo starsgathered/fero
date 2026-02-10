@@ -1,4 +1,4 @@
-import 'package:fero/initial_sync/initial_sync_status.dart';
+import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 
 /// Public interface for the initial sync service.
 abstract class InitialSyncService {

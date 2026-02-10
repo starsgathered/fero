@@ -1,8 +1,7 @@
 import 'dart:async';
 
-import 'package:fero/initial_sync/initial_sync.dart';
-import 'package:fero/metadata/sync_meta_data_repository.dart';
-
+import 'package:fero_sync/initial_sync/initial_sync.dart';
+import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
 
 /// High-level coordinator that decides when to run initial vs background sync
 /// and exposes control operations. Keep logic minimal; composition and

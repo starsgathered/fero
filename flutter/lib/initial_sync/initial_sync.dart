@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:fero/core/backoff.dart';
-import 'package:fero/core/exceptions.dart';
-import 'package:fero/core/sync_handler.dart';
-import 'package:fero/core/sync_item.dart';
-import 'package:fero/initial_sync/initial_sync_service.dart';
-import 'package:fero/initial_sync/initial_sync_status.dart';
-import 'package:fero/metadata/sync_meta_data_repository.dart';
+import 'package:fero_sync/core/backoff.dart';
+import 'package:fero_sync/core/exceptions.dart';
+import 'package:fero_sync/core/sync_handler.dart';
+import 'package:fero_sync/core/sync_item.dart';
+import 'package:fero_sync/initial_sync/initial_sync_service.dart';
+import 'package:fero_sync/initial_sync/initial_sync_status.dart';
+import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
 
 class InitialSyncManager implements InitialSyncService {
   final SyncMetadataRepository _metadataRepo;
@@ -26,12 +26,11 @@ class InitialSyncManager implements InitialSyncService {
     BackoffStrategy? backoffStrategy,
     int maxRetries = 5,
     required SyncMetadataRepository metadataRepo,
-  }) : _metadataRepo = metadataRepo,
-       _handlers = Map.unmodifiable(handlers),
-       _backoff =
-           backoffStrategy ??
-           ExponentialBackoffStrategy(baseMillis: 1, maxMillis: 30),
-       _maxRetries = maxRetries;
+  })  : _metadataRepo = metadataRepo,
+        _handlers = Map.unmodifiable(handlers),
+        _backoff = backoffStrategy ??
+            ExponentialBackoffStrategy(baseMillis: 1, maxMillis: 30),
+        _maxRetries = maxRetries;
 
   @override
   InitialSyncStatus get status => _status;

@@ -1,5 +1,5 @@
-import 'package:fero/core/sync_item.dart';
-import 'package:fero/core/sync_result.dart';
+import 'package:fero_sync/core/sync_item.dart';
+import 'package:fero_sync/core/sync_result.dart';
 
 /// A feature-specific sync handler contract.
 abstract class SyncHandler {

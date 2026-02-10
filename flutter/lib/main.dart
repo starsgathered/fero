@@ -1,10 +1,10 @@
-import 'package:fero/coordinator/sync_coordinator.dart';
-import 'package:fero/core/backoff.dart';
-import 'package:fero/core/sync_handler.dart';
-import 'package:fero/core/sync_item.dart';
-import 'package:fero/core/sync_result.dart';
-import 'package:fero/initial_sync/initial_sync.dart';
-import 'package:fero/metadata/sync_meta_data_repository.dart';
+import 'package:fero_sync/coordinator/sync_coordinator.dart';
+import 'package:fero_sync/core/backoff.dart';
+import 'package:fero_sync/core/sync_handler.dart';
+import 'package:fero_sync/core/sync_item.dart';
+import 'package:fero_sync/core/sync_result.dart';
+import 'package:fero_sync/initial_sync/initial_sync.dart';
+import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
 
 /// Example feature handlers
 class ContactsSyncHandler implements SyncHandler {
