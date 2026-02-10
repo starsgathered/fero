@@ -44,11 +44,14 @@ class ExponentialBackoffStrategy implements BackoffStrategy {
   @override
   Duration nextDelay(int attempt) {
     if (attempt <= 0) return Duration.zero;
-    final num exp = pow(2, attempt);
-    final int baseMs = baseMillis;
-    final int capMs = min(maxMillis, (baseMs * exp).toInt());
-    if (capMs <= 0) return Duration.zero;
-    final int ms = _rnd.nextInt(capMs + 1);
-    return Duration(milliseconds: ms);
+
+    final int exponential = (baseMillis * pow(2, attempt - 1)).toInt();
+    final int capped = min(exponential, maxMillis);
+    if (capped <= 0) return Duration.zero;
+
+    final int half = capped ~/ 2;
+    final int jitter = half + _rnd.nextInt(half + 1);
+
+    return Duration(milliseconds: jitter);
   }
 }
