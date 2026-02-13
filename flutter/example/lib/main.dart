@@ -1,15 +1,15 @@
-import 'package:fero_sync/coordinator/sync_coordinator.dart';
 import 'package:fero_sync/core/backoff.dart';
 import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/core/sync_item.dart';
 import 'package:fero_sync/core/sync_result.dart';
-import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
+import 'package:fero_sync/fero_sync.dart';
+import 'package:fero_sync/queue/sync_queue_repository.dart';
 
 /// Example feature handlers
 class ContactsSyncHandler implements SyncHandler {
   @override
   Future<SyncResult> handle(SyncItem item) async {
-    print('Syncing contacts for ${item.userId}...');
+    print('Syncing contacts for ${item.featureKey}...');
     await Future.delayed(Duration(seconds: 1)); // simulate network call
     return SyncResult.success();
   }
@@ -18,7 +18,7 @@ class ContactsSyncHandler implements SyncHandler {
 class MessagesSyncHandler implements SyncHandler {
   @override
   Future<SyncResult> handle(SyncItem item) async {
-    print('Syncing messages for ${item.userId}...');
+    print('Syncing messages for ${item.featureKey}...');
     await Future.delayed(Duration(seconds: 1));
     return SyncResult.success();
   }
@@ -26,7 +26,7 @@ class MessagesSyncHandler implements SyncHandler {
 
 Future<void> main() async {
   // --- Metadata Repository ---
-  final metadataRepo = InMemorySyncMetadataRepository();
+  final metadataRepo = InMemorySyncQueueRepository();
 
   // --- Handlers ---
   final handlers = <String, SyncHandler>{
@@ -38,7 +38,7 @@ Future<void> main() async {
   final backoffStrategy = FixedBackoffStrategy(baseMillis: 500);
 
   // --- Sync Coordinator (creates InitialSyncManager internally) ---
-  final coordinator = FeroCoordinator(
+  final coordinator = FeroSync(
     handlers: handlers,
     syncMetadataRepository: metadataRepo,
     backoffStrategy: backoffStrategy,
@@ -51,5 +51,5 @@ Future<void> main() async {
   });
 
   // --- Run full sync flow ---
-  await coordinator.runInitialIfNeeded('user_123', ['contacts', 'messages']);
+  await coordinator.runInitialIfNeeded(['contacts', 'messages']);
 }

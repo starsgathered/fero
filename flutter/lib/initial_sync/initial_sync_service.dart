@@ -6,11 +6,10 @@ abstract class InitialSyncService {
   Stream<InitialSyncStatus> get statusStream;
 
   Future<Map<String, bool>> areSyncRequired(
-    String userId,
-    List<String> featureKeys,
+    Map<String, int> featureVersions,
   );
 
-  Future<void> runInitialSync(String userId, List<String> featureKeys);
+  Future<void> runInitialSync(Map<String, int> featureVersions);
 
   void cancel();
   void dispose();

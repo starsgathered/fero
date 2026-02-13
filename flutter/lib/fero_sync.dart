@@ -3,21 +3,21 @@ import 'dart:async';
 import 'package:fero_sync/core/backoff.dart';
 import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
-import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
+import 'package:fero_sync/queue/sync_queue_repository.dart';
 
 /// High-level coordinator that decides when to run initial vs background sync
 /// and exposes control operations. Keep logic minimal; composition and
 /// policies can be extended without changing this class.
-class FeroCoordinator {
+class FeroSync {
   late final InitialSyncManager initialManager;
-  final SyncMetadataRepository syncMetadataRepository;
+  final SyncQueueRepository syncMetadataRepository;
   final BackoffStrategy backoffStrategy;
 
   final Duration minInterval;
   final Map<String, DateTime> _lastRun = {};
   final Map<String, SyncHandler> handlers;
 
-  FeroCoordinator({
+  FeroSync({
     required this.handlers,
     required this.syncMetadataRepository,
     BackoffStrategy? backoffStrategy,
@@ -45,11 +45,14 @@ class FeroCoordinator {
   }
 
   /// Allow callers to request an explicit initial sync run via injected fn.
-  /// Runs the initial sync for the given `userId` and `features` only if
+  /// Runs the initial sync for the given `features` only if
   /// the store indicates any feature is missing a recorded last-sync.
   /// If an `InitialSyncService` was not provided during construction this
   /// is a no-op.
-  Future<void> runInitialIfNeeded(String userId, List<String> features) async {
-    await initialManager.runInitialSync(userId, features);
+  Future<void> runInitialIfNeeded(List<String> features) async {
+    final featureVersions = <String, int>{
+      for (final f in features) f: 0,
+    };
+    await initialManager.runInitialSync(featureVersions);
   }
 }

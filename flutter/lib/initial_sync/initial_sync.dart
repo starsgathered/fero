@@ -6,10 +6,10 @@ import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/core/sync_item.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/initial_sync/initial_sync_status.dart';
-import 'package:fero_sync/metadata/sync_meta_data_repository.dart';
+import 'package:fero_sync/queue/sync_queue_repository.dart';
 
 class InitialSyncManager implements InitialSyncService {
-  final SyncMetadataRepository _metadataRepo;
+  final SyncQueueRepository _metadataRepo;
   final Map<String, SyncHandler> _handlers;
   final BackoffStrategy _backoff;
   final int _maxRetries;
@@ -25,7 +25,7 @@ class InitialSyncManager implements InitialSyncService {
     required Map<String, SyncHandler> handlers,
     BackoffStrategy? backoffStrategy,
     int maxRetries = 5,
-    required SyncMetadataRepository metadataRepo,
+    required SyncQueueRepository metadataRepo,
   })  : _metadataRepo = metadataRepo,
         _handlers = Map.unmodifiable(handlers),
         _backoff = backoffStrategy ??
@@ -40,17 +40,18 @@ class InitialSyncManager implements InitialSyncService {
 
   @override
   Future<Map<String, bool>> areSyncRequired(
-    String userId,
-    List<String> featureKeys,
+    Map<String, int> featureVersions,
   ) async {
-    return _metadataRepo.areSyncRequired(
-      userId: userId,
-      featureKeys: featureKeys,
-    );
+    final results = <String, bool>{};
+    for (final entry in featureVersions.entries) {
+      final tasks = await _metadataRepo.getTasksByFeature(entry.key);
+      results[entry.key] = tasks.isNotEmpty;
+    }
+    return results;
   }
 
   @override
-  Future<void> runInitialSync(String userId, List<String> featureKeys) async {
+  Future<void> runInitialSync(Map<String, int> featureVersions) async {
     if (_isRunning) {
       throw SyncAlreadyRunningException('Initial sync already running');
     }
@@ -59,15 +60,15 @@ class InitialSyncManager implements InitialSyncService {
     _setStatus(InitialSyncStatus.running);
 
     try {
-      final needsSync = await areSyncRequired(userId, featureKeys);
+      final needsSync = await areSyncRequired(featureVersions);
 
       // skip if no features need syncing
-      if (featureKeys.every((key) => !needsSync[key]!)) {
+      if (featureVersions.keys.every((key) => !needsSync[key]!)) {
         _setStatus(InitialSyncStatus.completed);
         return;
       }
 
-      for (final key in featureKeys) {
+      for (final key in featureVersions.keys) {
         if (_isCancelled) {
           _setStatus(InitialSyncStatus.cancelled);
           return;
@@ -82,7 +83,7 @@ class InitialSyncManager implements InitialSyncService {
         }
 
         final ok = await _attemptWithPolicy(() async {
-          final item = SyncItem(featureKey: key, userId: userId);
+          final item = SyncItem(featureKey: key);
           final result = await handler.handle(item);
           if (!result.success) {
             throw result.error ??
@@ -99,13 +100,8 @@ class InitialSyncManager implements InitialSyncService {
           );
         }
 
-        final now = DateTime.now().toUtc();
         try {
-          await _metadataRepo.updateSyncTime(
-            featureKey: key,
-            userId: userId,
-            syncTime: now,
-          );
+          await _metadataRepo.removeTasksByFeature(key);
         } catch (_) {
           // best-effort persistence
         }
