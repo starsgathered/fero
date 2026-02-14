@@ -69,22 +69,28 @@ class DbSyncQueueRepository implements SyncQueueRepository {
 
   @override
   Future<SyncTask?> dequeue() async {
-    final maps = await _db.query(
-      _table,
-      where: '$colStatus = ?',
-      whereArgs: [SyncTaskStatus.pending.name],
-      orderBy: '$colEnqueuedAt ASC',
-      limit: 1,
-    );
+    return await _db.transaction((txn) async {
+      final maps = await txn.query(
+        _table,
+        where: '$colStatus = ?',
+        whereArgs: [SyncTaskStatus.pending.name],
+        orderBy: '$colEnqueuedAt ASC',
+        limit: 1,
+      );
 
-    if (maps.isEmpty) return null;
+      if (maps.isEmpty) return null;
 
-    final row = maps.first;
-    final id = row[colId] as String;
+      final row = maps.first;
+      final id = row[colId] as String;
 
-    await _db.delete(_table, where: '$colId = ?', whereArgs: [id]);
+      await txn.delete(
+        _table,
+        where: '$colId = ?',
+        whereArgs: [id],
+      );
 
-    return _syncTaskFromRow(row);
+      return _syncTaskFromRow(row);
+    });
   }
 
   @override
