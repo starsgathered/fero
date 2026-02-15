@@ -97,15 +97,10 @@ abstract class SyncHandler {
   /// Default: return all items as a list of SyncPayload
   Future<List<SyncPayload<Syncable>>> getLocal();
 
-  /// Get the last sync cursor (or null if never synced)
-  Future<String?> getLastSyncCursor();
-
-  /// Update the last sync cursor after a successful sync
-  Future<void> updateLastSyncCursor(String cursor);
-
   /// Fetch remote items for sync with optional pagination
+  /// `batchSize` controls how many items to fetch per page (required).
   /// Returns a batch and a nextCursor if more pages are available
-  Future<SyncBatchResult> getRemote({String? cursor});
+  Future<SyncBatchResult> getRemote({String? cursor, required int batchSize});
 
   /// Apply a batch of remote items to local storage
   /// Returns success/failure with detailed errors

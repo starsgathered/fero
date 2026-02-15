@@ -6,6 +6,7 @@ import 'package:fero_sync/core/sync_event.dart';
 import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/initial_sync/initial_sync_status.dart';
+import 'package:fero_sync/core/sync_metadata_repo.dart';
 
 /// Event-driven initial sync manager.
 /// Listens to [InitialSyncRequiredEvent] from Fero server and orchestrates sync.
@@ -14,6 +15,9 @@ class InitialSyncManager implements InitialSyncService {
   final Map<String, SyncHandler> _handlers;
   final BackoffStrategy _backoff;
   final int _maxRetries;
+  final int batchSize;
+  final int maxBatchSize;
+  final SyncMetaDataRepo metaRepo;
 
   final StreamController<InitialSyncStatus> _statusController =
       StreamController.broadcast();
@@ -30,6 +34,9 @@ class InitialSyncManager implements InitialSyncService {
     required Map<String, SyncHandler> handlers,
     BackoffStrategy? backoffStrategy,
     int maxRetries = 5,
+    required this.batchSize,
+    required this.maxBatchSize,
+    required this.metaRepo,
   })  : _handlers = Map.unmodifiable(handlers),
         _backoff = backoffStrategy ??
             ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
@@ -127,12 +134,20 @@ class InitialSyncManager implements InitialSyncService {
         );
       }
 
+      // If initial sync was already completed for this feature, skip it.
+      final alreadyInitial = await metaRepo.isInitialSyncCompleted(featureKey);
+      if (alreadyInitial) {
+        _featureStatuses[featureKey] = InitialSyncStatus.completed;
+        _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
+        return;
+      }
+
       if (_isCancelled) {
         throw OperationCancelledException('Sync cancelled before trying');
       }
 
-      // Step 1: Get last sync cursor for incremental fetch
-      String? cursor = await handler.getLastSyncCursor();
+      // Step 1: Get last cursor for initial sync (separate from incremental)
+      String? cursor = await metaRepo.getLastInitialSyncCursor(featureKey);
       // Step 2: Fetch all pages from remote (efficient paginated fetch)
       while (true) {
         if (_isCancelled) {
@@ -143,7 +158,7 @@ class InitialSyncManager implements InitialSyncService {
             throw OperationCancelledException(
                 "Operation was cancelled before fetch");
           }
-          return await handler.getRemote(cursor: cursor);
+          return await handler.getRemote(cursor: cursor, batchSize: batchSize);
         });
         if (batchResult == null) {
           throw MaxRetriesExceededException(
@@ -167,7 +182,8 @@ class InitialSyncManager implements InitialSyncService {
 
         // Step 4: Update cursor to continue from this batch
         if (batchResult.nextCursor != null) {
-          await handler.updateLastSyncCursor(batchResult.nextCursor!);
+          await metaRepo.updateLastInitialSyncCursor(
+              featureKey, batchResult.nextCursor!);
         }
 
         // Step 5: Check if there are more pages
@@ -178,6 +194,9 @@ class InitialSyncManager implements InitialSyncService {
       }
 
       _featureStatuses[featureKey] = InitialSyncStatus.completed;
+      // Mark initial sync as completed and record last synced cursor.
+      await metaRepo.setInitialSyncCompleted(featureKey, true);
+      await metaRepo.updateLastInitialSyncCursor(featureKey, cursor);
       _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
     } catch (e) {
       final st = StackTrace.current;

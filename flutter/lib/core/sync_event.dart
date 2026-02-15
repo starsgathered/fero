@@ -11,20 +11,17 @@ abstract class SyncEvent {
 
 /// Event emitted when a feature requires initial synchronization.
 class InitialSyncRequiredEvent extends SyncEvent {
-  InitialSyncRequiredEvent({required String featureKey, DateTime? timestamp})
-      : super(featureKey: featureKey, timestamp: timestamp);
+  InitialSyncRequiredEvent({required super.featureKey, super.timestamp});
 }
 
 /// Event emitted when initial sync starts for a feature.
 class InitialSyncStartedEvent extends SyncEvent {
-  InitialSyncStartedEvent({required String featureKey, DateTime? timestamp})
-      : super(featureKey: featureKey, timestamp: timestamp);
+  InitialSyncStartedEvent({required super.featureKey, super.timestamp});
 }
 
 /// Event emitted when initial sync completes successfully for a feature.
 class InitialSyncCompletedEvent extends SyncEvent {
-  InitialSyncCompletedEvent({required String featureKey, DateTime? timestamp})
-      : super(featureKey: featureKey, timestamp: timestamp);
+  InitialSyncCompletedEvent({required super.featureKey, super.timestamp});
 }
 
 /// Event emitted when initial sync fails for a feature.

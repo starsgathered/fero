@@ -5,6 +5,7 @@ import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/sync_event.dart';
 import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
+import 'package:fero_sync/core/sync_metadata_repo.dart';
 
 /// --- FeroSync ---
 /// Main orchestrator for syncing multiple features using handlers.
@@ -15,10 +16,13 @@ import 'package:fero_sync/initial_sync/initial_sync.dart';
 /// - Event broadcasting for UI or logging
 class FeroSync {
   /// Manager for performing the initial sync of all features
-  late final InitialSyncManager initialManager;
+  final InitialSyncManager initialManager;
+
+  /// Repository for storing sync metadata (e.g. last cursors)
+  final SyncMetaDataRepo metadataRepo;
 
   /// Map of feature keys to their respective handlers
-  final Map<String, SyncHandler> handlers;
+  final Map<String, SyncHandler> initialSyncHandlers;
 
   /// Strategy to handle retries/backoff for failed sync attempts
   final BackoffStrategy backoffStrategy;
@@ -26,28 +30,36 @@ class FeroSync {
   /// Strategy to resolve conflicts between local and remote data
   final ConflictResolutionStrategy conflictStrategy;
 
+  /// Number of items to fetch per remote batch during initial sync
+  final int batchSize;
+
+  /// Maximum allowed batch size in production (cap)
+  final int maxBatchSize;
+
   /// Optional subscription to listen to events internally
   StreamSubscription? _eventSubscription;
 
   /// Private constructor to enforce usage of the async factory `create`
   FeroSync._({
-    required this.handlers,
+    required this.initialSyncHandlers,
     required this.backoffStrategy,
     required this.conflictStrategy,
-  }) {
-    initialManager = InitialSyncManager(
-      handlers: handlers,
-      backoffStrategy: backoffStrategy,
-      maxRetries: 5, // Retry initial sync up to 5 times
-    );
-  }
+    required this.batchSize,
+    required this.maxBatchSize,
+    required this.metadataRepo,
+    required this.initialManager,
+  });
 
   /// Factory method to create an instance of FeroSync asynchronously
   /// Sets default backoff and conflict resolution strategies if none are provided
   static Future<FeroSync> create({
-    required Map<String, SyncHandler> handlers,
+    required Map<String, SyncHandler> initialSyncHandlers,
+    required SyncMetaDataRepo metadataRepo,
     BackoffStrategy? backoffStrategy,
     ConflictResolutionStrategy? conflictStrategy,
+    int? batchSize,
+    int? maxBatchSize,
+    InitialSyncManager? initialManager,
   }) async {
     final backoff = backoffStrategy ??
         ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000);
@@ -55,10 +67,28 @@ class FeroSync {
     final strategy =
         conflictStrategy ?? ConflictResolutionStrategy.highestVersionWins;
 
+    final int bs = batchSize ?? 50;
+    final int mbs = maxBatchSize ?? 500;
+
+    // If caller provided an InitialSyncManager, use it; otherwise create a default one
+    final InitialSyncManager initManager = initialManager ??
+        InitialSyncManager(
+          handlers: initialSyncHandlers,
+          backoffStrategy: backoff,
+          maxRetries: 5,
+          batchSize: bs,
+          maxBatchSize: mbs,
+          metaRepo: metadataRepo,
+        );
+
     return FeroSync._(
-      handlers: handlers,
+      initialSyncHandlers: initialSyncHandlers,
       backoffStrategy: backoff,
       conflictStrategy: strategy,
+      batchSize: bs,
+      maxBatchSize: mbs,
+      metadataRepo: metadataRepo,
+      initialManager: initManager,
     );
   }
 
@@ -80,11 +110,6 @@ class FeroSync {
   /// Emit a sync event manually
   void emitSyncEvent(SyncEvent event) {
     initialManager.emitEvent(event);
-  }
-
-  /// Trigger an initial sync for a specific feature
-  void triggerInitialSync(String featureKey) {
-    emitSyncEvent(InitialSyncRequiredEvent(featureKey: featureKey));
   }
 
   /// Stream to observe status updates (e.g., syncing, completed, failed)

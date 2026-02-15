@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:fero_sync/core/sync_handler.dart';
+import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:fero_sync/fero_sync.dart';
-import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 
 /// ----------------------------
-/// 1. Model
+/// 1. Models (Your Data)
 /// ----------------------------
 
 class Contact implements Syncable {
@@ -17,15 +17,24 @@ class Contact implements Syncable {
   @override
   String get syncId => id;
 
-  Contact({
-    required this.id,
-    required this.name,
-    required this.version,
-  });
+  Contact({required this.id, required this.name, required this.version});
+}
+
+class Task implements Syncable {
+  final String id;
+  final String title;
+
+  @override
+  final int version;
+
+  @override
+  String get syncId => id;
+
+  Task({required this.id, required this.title, required this.version});
 }
 
 /// ----------------------------
-/// 2. Sync Handler
+/// 2. Sync Handlers
 /// ----------------------------
 
 class ContactsSyncHandler extends SyncHandler {
@@ -33,31 +42,18 @@ class ContactsSyncHandler extends SyncHandler {
     Contact(id: '1', name: 'Alice', version: 1),
   ];
 
-  String? _cursor;
-
-  @override
-  Future<String?> getLastSyncCursor() async => _cursor;
-
-  @override
-  Future<void> updateLastSyncCursor(String cursor) async {
-    _cursor = cursor;
-  }
-
   @override
   Future<List<SyncPayload<Syncable>>> getLocal() async {
-    await Future.delayed(const Duration(milliseconds: 300));
     return _localContacts.map((c) => SyncPayload<Syncable>(data: c)).toList();
   }
 
   @override
-  Future<SyncBatchResult> getRemote({String? cursor}) async {
-    await Future.delayed(const Duration(seconds: 1));
-    // Fetch remote contacts from API with pagination using cursor/offset, offset can be convert to string
+  Future<SyncBatchResult> getRemote({String? cursor, int? batchSize}) async {
+    // Simulating remote API
     final remoteContacts = [
       Contact(id: '1', name: 'Alice Johnson', version: 2),
       Contact(id: '2', name: 'Bob', version: 1),
     ];
-
     return SyncBatchResult(
       items: remoteContacts.map((c) => SyncPayload<Syncable>(data: c)).toList(),
       nextCursor: null,
@@ -67,54 +63,48 @@ class ContactsSyncHandler extends SyncHandler {
   @override
   Future<ApplyResult> applyToLocal(
       List<SyncPayload<Syncable>> remoteStates) async {
-    await Future.delayed(const Duration(seconds: 1));
-    // Apply remote changes to local storage (e.g. database)
     for (final payload in remoteStates) {
       final contact = payload.data as Contact;
       final index = _localContacts.indexWhere((c) => c.id == contact.id);
-
       if (index >= 0) {
         _localContacts[index] = contact;
       } else {
         _localContacts.add(contact);
       }
     }
-
     return ApplyResult.success();
   }
 
   @override
   Future<ApplyResult> applyToRemote(
       List<SyncPayload<Syncable>> localStates) async {
-    await Future.delayed(const Duration(seconds: 1));
-    // Make API calls to update remote server with local changes
+    // Normally, you’d call an API here
     return ApplyResult.success();
   }
 }
 
-/// 3. Main
+/// ----------------------------
+/// 3. Main - Putting it all together
+/// ----------------------------
 
 Future<void> main() async {
-  print('🚀 Initializing FeroSync...\n');
+  print('🚀 Setting up FeroSync...');
 
   final feroSync = await FeroSync.create(
-    handlers: {
+    initialSyncHandlers: {
       'contacts': ContactsSyncHandler(),
     },
+    metadataRepo: InMemorySyncMetaDataRepo(),
   );
 
-  // Listen to global sync status
+  // Listen to status updates
   feroSync.statusStream.listen((status) {
-    if (status == InitialSyncStatus.completed) {
-      print('📡 Initial Sync completed');
-      return;
-    }
-    print('📡 Sync Status: $status');
+    print('📡 Sync Status Update: $status');
   });
 
-  print('\n▶ Starting sync...\n');
-
+  // Start initial sync
+  print('▶ Running initial sync for all features...');
   await feroSync.run();
 
-  print('\n✅ Sync finished.');
+  print('✅ All syncs completed!');
 }

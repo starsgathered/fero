@@ -510,7 +510,6 @@ feroSync.eventStream
 
 * **No networking** — You implement network calls in your handlers
 * **No database** — You handle local storage in your handlers
-* **No background services** — Use `WorkManager` or `Workmanager` package for background sync
 * **No platform channels** — Pure Dart, no native code
 * **No UI components** — You build your sync UI with `StreamBuilder` or state management
 
