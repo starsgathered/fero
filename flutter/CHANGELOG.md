@@ -21,3 +21,6 @@
 
 ## 0.4.1 - 2026-02-15
 - Updated example usage
+
+## 0.4.2 - 2026-02-15
+- Updated Readme.md

@@ -3,7 +3,20 @@ description: "Fero - Flutter Sync Orchestration SDK by StarsGathered"
 homepage: https://www.starsgathered.com/products/fero
 repository: https://github.com/starsgathered/fero
 documentation: https://github.com/starsgathered/fero/tree/main/flutter#readme
-
+keywords:
+  - flutter
+  - sync
+  - offline
+  - database
+  - realtime
+  - data-sync
+  - state-management
+  - flutter-sdk
+  - cross-platform
+  - background-sync
+  - automatic-sync
+  - cloud-sync
+  
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
 # followed by an optional build number separated by a +.
@@ -16,7 +29,7 @@ documentation: https://github.com/starsgathered/fero/tree/main/flutter#readme
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.4.1
+version: 0.4.2
 
 environment:
   sdk: ">=3.1.0 <4.0.0"
