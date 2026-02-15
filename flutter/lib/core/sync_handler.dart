@@ -1,94 +1,117 @@
-/// Represents a log event of a data change.
-class LogEvent {
-  final String id;
-  final String operation; // 'create', 'update', 'delete'
-  final Map<String, dynamic> data;
-  final int version; // Primary ordering key (from Fero server)
-  final DateTime timestamp; // Secondary (for analytics/UI only)
+/* 
+--- Versioning Overview ---
+Every item in Fero is tracked using a `version` number.
+Versions are server-assigned and used for ordering, not timestamps.
 
-  LogEvent({
-    required this.id,
-    required this.operation,
-    required this.data,
-    required this.version,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+Why versions instead of timestamps?
+1. Server is the source of truth, so clients don’t rely on local clocks.
+2. Deterministic: version X always comes before version X+1.
+3. Works in offline-first, distributed setups.
+4. Timestamps are kept only for analytics/UI, not for ordering.
 
-  /// Compare by version (primary) then timestamp (secondary fallback)
-  /// Returns true if this event is newer than other
-  bool isNewerThan(LogEvent other) {
-    if (version != other.version) {
-      return version > other.version;
-    }
-    // Fallback to timestamp if versions are equal
-    return timestamp.isAfter(other.timestamp);
-  }
+Versions are simple integers stored inside the payload.
+They are the main authority for ordering and conflict resolution.
+
+--- Syncable Interface ---
+Any object that can be synced should implement this interface.
+It ensures every syncable object has:
+- `syncId`: unique identifier for the item
+- `version`: current version of the item */
+abstract class Syncable {
+  String get syncId;
+  int get version;
 }
 
-/// Version information for sync state tracking.
-/// Version is the primary ordering mechanism in Fero system.
-/// 
-/// Why versions instead of timestamps?
-/// - Fero server is the source of truth - versions are server-assigned
-/// - No clock skew issues (clients can have wrong time)
-/// - Deterministic: version X is always before version X+1
-/// - Works in distributed offline-first scenarios
-/// - Timestamp is kept as secondary for analytics/UI only
-class VersionInfo {
-  final int version; // Primary: server-assigned version number
-  final DateTime lastSyncAt; // Secondary: for UI/analytics
+/// --- SyncPayload ---
+/// Generic container for a feature's data and its version.
+/// - `T` is the actual business data type, which must implement Syncable.
+/// - Keeps metadata separate from your business data.
+class SyncPayload<T extends Syncable> {
+  final T data;
 
-  VersionInfo({
-    required this.version,
-    DateTime? lastSyncAt,
-  }) : lastSyncAt = lastSyncAt ?? DateTime.now();
-
-  bool isNewerThan(VersionInfo other) => version > other.version;
-  bool isAtLeast(VersionInfo other) => version >= other.version;
+  SyncPayload({required this.data});
 }
 
-/// Merge result from comparing local and remote changes.
-class MergeResult {
-  final List<LogEvent> toApplyLocally;
-  final List<LogEvent> toApplyRemotely;
-  final bool hasConflicts;
+/// --- SyncBatchResult ---
+/// Result of fetching a batch of items from the server or local storage.
+/// Supports optional pagination with a cursor.
+class SyncBatchResult {
+  /// List of items in this batch
+  final List<SyncPayload<Syncable>> items;
 
-  MergeResult({
-    required this.toApplyLocally,
-    required this.toApplyRemotely,
-    this.hasConflicts = false,
+  /// Cursor for the next page. Null means no more pages.
+  final String? nextCursor;
+
+  SyncBatchResult({
+    required this.items,
+    this.nextCursor,
   });
 }
 
-/// A feature-specific sync handler contract.
-/// The user provides these callbacks to orchestrate synchronization.
-/// Note: The SDK handles log storage internally - users don't manage logs directly.
-/// Conflict resolution is handled by the SDK using the configured strategy.
+/// --- ApplyResult ---
+/// Result of trying to apply a batch of items (to local or remote storage)
+/// Provides success flag and optional error details.
+class ApplyResult {
+  /// True if the operation succeeded
+  final bool success;
+
+  /// List of errors for failed items
+  final List<ApplyError> errors;
+
+  ApplyResult({
+    required this.success,
+    this.errors = const [],
+  });
+
+  /// Success factory
+  factory ApplyResult.success() {
+    return ApplyResult(success: true);
+  }
+
+  /// Failure factory
+  factory ApplyResult.failure(List<ApplyError> errors) {
+    return ApplyResult(success: false, errors: errors);
+  }
+}
+
+/// --- ApplyError ---
+/// Detailed info about why applying an item failed
+class ApplyError {
+  /// Error message or exception details
+  final String message;
+
+  /// Optional code for categorization
+  final String? code;
+
+  ApplyError({
+    required this.message,
+    this.code,
+  });
+}
+
+/// --- SyncHandler ---
+/// Contract for a feature-specific sync implementation.
+/// Handles fetching local/remote data and applying changes.
 abstract class SyncHandler {
-  /// Get the current local version for this feature.
-  /// Used to determine if sync is needed.
-  Future<VersionInfo> getLocalVersion();
+  /// Fetch local items for sync
+  /// Default: return all items as a list of SyncPayload
+  Future<List<SyncPayload<Syncable>>> getLocal();
 
-  /// Get the current remote version for this feature.
-  /// Used to determine if sync is needed.
-  Future<VersionInfo> getRemoteVersion();
+  /// Get the last sync cursor (or null if never synced)
+  Future<String?> getLastSyncCursor();
 
-  /// Apply remote log events to the local database.
-  /// [events] are the changes that occurred remotely (determined by conflict strategy).
-  /// After this completes, the SDK automatically logs these changes.
-  Future<void> applyToLocalDatabase(List<LogEvent> events);
+  /// Update the last sync cursor after a successful sync
+  Future<void> updateLastSyncCursor(String cursor);
 
-  /// Apply local log events to the remote database.
-  /// [events] are the changes that occurred locally (determined by conflict strategy).
-  /// After this completes, the SDK automatically logs these changes.
-  Future<void> applyToRemoteDatabase(List<LogEvent> events);
+  /// Fetch remote items for sync with optional pagination
+  /// Returns a batch and a nextCursor if more pages are available
+  Future<SyncBatchResult> getRemote({String? cursor});
 
-  /// Update the local version marker after successful sync.
-  /// [version] is the new version number.
-  /// Called automatically by SDK after sync completes.
-  Future<void> updateLocalSyncVersion(int version);
+  /// Apply a batch of remote items to local storage
+  /// Returns success/failure with detailed errors
+  Future<ApplyResult> applyToLocal(List<SyncPayload<Syncable>> remoteStates);
 
-  /// Optional: Provide a readable name for this feature.
-  /// Used in logging and analytics.
-  String get featureName => runtimeType.toString();
+  /// Apply a batch of local items to remote storage
+  /// Returns success/failure with detailed errors
+  Future<ApplyResult> applyToRemote(List<SyncPayload<Syncable>> localStates);
 }

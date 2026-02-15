@@ -4,118 +4,101 @@ import 'package:fero_sync/core/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/sync_event.dart';
 import 'package:fero_sync/core/sync_handler.dart';
-import 'package:fero_sync/core/sync_log_repository.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
 
-/// High-level SDK that manages initial sync as an event-driven process.
-/// The Fero server emits events when sync is needed; this class listens
-/// and orchestrates the sync for registered features.
-/// 
-/// Automatically handles:
-/// - Log storage and retrieval (persisted to SQLite by default)
-/// - Conflict detection and resolution (default: highest-version-wins)
-/// - Version tracking
-/// - Retry logic with backoff
+/// --- FeroSync ---
+/// Main orchestrator for syncing multiple features using handlers.
+/// Handles:
+/// - Initial sync
+/// - Conflict resolution
+/// - Retry/backoff strategies
+/// - Event broadcasting for UI or logging
 class FeroSync {
+  /// Manager for performing the initial sync of all features
   late final InitialSyncManager initialManager;
+
+  /// Map of feature keys to their respective handlers
   final Map<String, SyncHandler> handlers;
-  final SyncLogRepository logRepository;
+
+  /// Strategy to handle retries/backoff for failed sync attempts
   final BackoffStrategy backoffStrategy;
+
+  /// Strategy to resolve conflicts between local and remote data
   final ConflictResolutionStrategy conflictStrategy;
-  final Set<String> _registeredFeatures = {};
+
+  /// Optional subscription to listen to events internally
   StreamSubscription? _eventSubscription;
 
+  /// Private constructor to enforce usage of the async factory `create`
   FeroSync._({
     required this.handlers,
-    required this.logRepository,
     required this.backoffStrategy,
     required this.conflictStrategy,
   }) {
     initialManager = InitialSyncManager(
       handlers: handlers,
-      logRepository: logRepository,
       backoffStrategy: backoffStrategy,
-      conflictStrategy: conflictStrategy,
-      maxRetries: 5,
+      maxRetries: 5, // Retry initial sync up to 5 times
     );
   }
 
-  /// Create a new FeroSync instance with SQLite-backed log storage.
-  /// The logRepository defaults to DbSyncLogRepository for persistent storage.
-  /// Use this factory method for production apps.
+  /// Factory method to create an instance of FeroSync asynchronously
+  /// Sets default backoff and conflict resolution strategies if none are provided
   static Future<FeroSync> create({
     required Map<String, SyncHandler> handlers,
-    SyncLogRepository? logRepository,
     BackoffStrategy? backoffStrategy,
     ConflictResolutionStrategy? conflictStrategy,
   }) async {
-    final repo = logRepository ?? await DbSyncLogRepository.open();
-    final backoff = backoffStrategy ?? 
+    final backoff = backoffStrategy ??
         ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000);
-    final strategy = conflictStrategy ?? ConflictResolutionStrategy.highestVersionWins;
+
+    final strategy =
+        conflictStrategy ?? ConflictResolutionStrategy.highestVersionWins;
 
     return FeroSync._(
       handlers: handlers,
-      logRepository: repo,
       backoffStrategy: backoff,
       conflictStrategy: strategy,
     );
   }
 
-  /// Create a new FeroSync instance with in-memory log storage (for testing).
-  /// Use this constructor for tests or when you don't need persistence.
-  FeroSync.forTesting({
-    required Map<String, SyncHandler> handlers,
-    SyncLogRepository? logRepository,
-    BackoffStrategy? backoffStrategy,
-    ConflictResolutionStrategy? conflictStrategy,
-  }) : this._(
-    handlers: handlers,
-    logRepository: logRepository ?? InMemorySyncLogRepository(),
-    backoffStrategy: backoffStrategy ?? 
-        ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
-    conflictStrategy: conflictStrategy ?? ConflictResolutionStrategy.highestVersionWins,
-  );
-
-  /// Register a feature for automatic sync when events are received.
-  void registerFeature(String featureKey) {
-    _registeredFeatures.add(featureKey);
-    initialManager.registerFeature(featureKey);
-  }
-
-  /// Start listening to sync events from Fero's central server.
-  /// Call this once during app initialization.
+  /// Start listening to sync events
   Future<void> startSync() async {
     await initialManager.startListeningToEvents();
   }
 
-  /// Emit a sync event (useful for testing or manual triggering).
+  /// Run the initial sync for all registered features
+  Future<void> run() async {
+    await initialManager.run();
+  }
+
+  /// Get current status of a specific feature
+  dynamic getFeatureStatus(String featureKey) {
+    return initialManager.getFeatureStatus(featureKey);
+  }
+
+  /// Emit a sync event manually
   void emitSyncEvent(SyncEvent event) {
     initialManager.emitEvent(event);
   }
 
-  /// Convenience method to trigger initial sync for a feature.
+  /// Trigger an initial sync for a specific feature
   void triggerInitialSync(String featureKey) {
     emitSyncEvent(InitialSyncRequiredEvent(featureKey: featureKey));
   }
 
-  /// Get the status stream to listen for sync status changes.
+  /// Stream to observe status updates (e.g., syncing, completed, failed)
   Stream<dynamic> get statusStream => initialManager.statusStream;
 
-  /// Get the event stream to listen for sync events.
+  /// Stream to observe raw sync events for logging or UI updates
   Stream<SyncEvent> get eventStream => initialManager.eventStream;
 
-  /// Get conflict history for a feature (for analytics).
-  Future<List<SyncConflict>> getConflictHistory(String featureKey) async {
-    return logRepository.getConflictHistory(featureKey);
-  }
-
-  /// Cancel ongoing sync operation.
+  /// Cancel ongoing operations safely
   void cancel() {
     initialManager.cancel();
   }
 
-  /// Cleanup resources.
+  /// Dispose resources when the FeroSync instance is no longer needed
   void dispose() {
     _eventSubscription?.cancel();
     initialManager.dispose();

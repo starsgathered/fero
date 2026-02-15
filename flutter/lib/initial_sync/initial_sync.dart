@@ -1,11 +1,9 @@
 import 'dart:async';
 
 import 'package:fero_sync/core/backoff.dart';
-import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/exceptions.dart';
 import 'package:fero_sync/core/sync_event.dart';
 import 'package:fero_sync/core/sync_handler.dart';
-import 'package:fero_sync/core/sync_log_repository.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 
@@ -14,10 +12,8 @@ import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 /// Automatically handles log storage and conflict tracking.
 class InitialSyncManager implements InitialSyncService {
   final Map<String, SyncHandler> _handlers;
-  final SyncLogRepository _logRepository;
   final BackoffStrategy _backoff;
   final int _maxRetries;
-  final ConflictResolutionStrategy _conflictStrategy;
 
   final StreamController<InitialSyncStatus> _statusController =
       StreamController.broadcast();
@@ -28,19 +24,15 @@ class InitialSyncManager implements InitialSyncService {
 
   bool _isRunning = false;
   bool _isCancelled = false;
-  final Set<String> _registeredFeatures = {};
+  final Map<String, InitialSyncStatus> _featureStatuses = {};
 
   InitialSyncManager({
     required Map<String, SyncHandler> handlers,
-    SyncLogRepository? logRepository,
     BackoffStrategy? backoffStrategy,
-    ConflictResolutionStrategy conflictStrategy = ConflictResolutionStrategy.highestVersionWins,
     int maxRetries = 5,
   })  : _handlers = Map.unmodifiable(handlers),
-        _logRepository = logRepository ?? InMemorySyncLogRepository(),
         _backoff = backoffStrategy ??
             ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
-        _conflictStrategy = conflictStrategy,
         _maxRetries = maxRetries;
 
   @override
@@ -52,9 +44,44 @@ class InitialSyncManager implements InitialSyncService {
   @override
   Stream<SyncEvent> get eventStream => _eventController.stream;
 
+  /// Run initial sync for all handlers.
   @override
-  void registerFeature(String featureKey) {
-    _registeredFeatures.add(featureKey);
+  Future<void> run() async {
+    if (_isRunning) {
+      throw SyncAlreadyRunningException('Initial sync already running');
+    }
+
+    _isRunning = true;
+    _isCancelled = false;
+    _setStatus(InitialSyncStatus.running);
+
+    try {
+      final featuresToSync = _handlers.keys.toList();
+
+      for (final featureKey in featuresToSync) {
+        if (_isCancelled) {
+          _setStatus(InitialSyncStatus.cancelled);
+          throw OperationCancelledException('Initial sync cancelled');
+        }
+
+        await _performSync(featureKey);
+      }
+
+      _setStatus(InitialSyncStatus.completed);
+    } catch (e) {
+      if (_status != InitialSyncStatus.cancelled) {
+        _setStatus(InitialSyncStatus.failed);
+      }
+      rethrow;
+    } finally {
+      _isRunning = false;
+    }
+  }
+
+  /// Get the sync status for a specific feature.
+  @override
+  InitialSyncStatus? getFeatureStatus(String featureKey) {
+    return _featureStatuses[featureKey];
   }
 
   @override
@@ -73,8 +100,8 @@ class InitialSyncManager implements InitialSyncService {
   /// Handle incoming sync events from the stream.
   void _handleSyncEvent(SyncEvent event) async {
     if (event is InitialSyncRequiredEvent) {
-      if (!_registeredFeatures.contains(event.featureKey)) {
-        return; // Feature not registered, skip
+      if (!_handlers.containsKey(event.featureKey)) {
+        return; // Handler not available, skip
       }
 
       try {
@@ -85,147 +112,81 @@ class InitialSyncManager implements InitialSyncService {
     }
   }
 
-  /// Perform initial sync for a single feature.
+  /// Perform initial sync for a feature using batch operations.
+  /// Fetches and applies multiple items in bulk for performance.
   Future<void> _performSync(String featureKey) async {
-    if (_isRunning) {
-      throw SyncAlreadyRunningException('Initial sync already running');
-    }
-
-    _isRunning = true;
-    _isCancelled = false;
-    _setStatus(InitialSyncStatus.running);
+    _featureStatuses[featureKey] = InitialSyncStatus.running;
     _emitEvent(InitialSyncStartedEvent(featureKey: featureKey));
 
     try {
       final handler = _handlers[featureKey];
       if (handler == null) {
-        _setStatus(InitialSyncStatus.failed);
+        _featureStatuses[featureKey] = InitialSyncStatus.failed;
         throw HandlerNotFoundException(
           'No sync handler registered for feature: $featureKey',
         );
       }
 
-      final synced = await _attemptWithPolicy(() async {
-        // Step 1: Get version information from both sides
-        final localVersion = await handler.getLocalVersion();
-        final remoteVersion = await handler.getRemoteVersion();
-
-        // Step 2: Check if sync is actually needed
-        if (!localVersion.isNewerThan(remoteVersion) &&
-            !remoteVersion.isNewerThan(localVersion)) {
-          // Versions are equal, no sync needed
-          return;
-        }
-
-        // Step 3: Get log events from SDK's internal repository
-        final localEvents =
-            await _logRepository.getLocalLogsSince(featureKey, localVersion.version);
-        final remoteEvents = await _logRepository.getRemoteLogsSince(
-            featureKey, localVersion.version);
-
-        // Step 4: Apply conflict resolution strategy automatically
-        final mergeResult = ConflictResolver.resolve(
-          localEvents: localEvents,
-          remoteEvents: remoteEvents,
-          strategy: _conflictStrategy,
-        );
-
-        // Step 5: Emit conflict event if conflicts detected
-        if (mergeResult.hasConflicts && 
-            (mergeResult.toApplyLocally.isNotEmpty || 
-             mergeResult.toApplyRemotely.isNotEmpty)) {
-          final conflictingIds = <String>{};
-          for (final event in mergeResult.toApplyLocally) {
-            conflictingIds.add(event.id);
-          }
-          for (final event in mergeResult.toApplyRemotely) {
-            conflictingIds.add(event.id);
-          }
-
-          final conflict = SyncConflict(
-            featureKey: featureKey,
-            conflictingIds: conflictingIds.toList(),
-            resolutionStrategy: _getResolutionStrategy(mergeResult),
-            localChangeCount: localEvents.length,
-            remoteChangeCount: remoteEvents.length,
-          );
-
-          // Record conflict for analytics
-          await _logRepository.recordConflict(featureKey, conflict);
-
-          // Emit conflict event
-          _emitEvent(SyncConflictDetectedEvent(
-            featureKey: featureKey,
-            conflictingIds: conflictingIds.toList(),
-            localChangesCount: localEvents.length,
-            remoteChangesCount: remoteEvents.length,
-            resolutionStrategy: _getResolutionStrategy(mergeResult),
-          ));
-        }
-
-        // Step 6: Apply remote changes to local database
-        if (mergeResult.toApplyLocally.isNotEmpty) {
-          await handler.applyToLocalDatabase(mergeResult.toApplyLocally);
-          // Log the applied changes
-          for (final event in mergeResult.toApplyLocally) {
-            await _logRepository.addLocalLog(featureKey, event);
-          }
-        }
-
-        // Step 7: Apply local changes to remote database
-        if (mergeResult.toApplyRemotely.isNotEmpty) {
-          await handler.applyToRemoteDatabase(mergeResult.toApplyRemotely);
-          // Log the applied changes
-          for (final event in mergeResult.toApplyRemotely) {
-            await _logRepository.addRemoteLog(featureKey, event);
-          }
-        }
-
-        // Step 8: Update local version marker to match remote
-        await handler.updateLocalSyncVersion(remoteVersion.version);
-
-        // Step 9: Clear old logs (after version update)
-        await _logRepository.clearLogsBefore(featureKey, remoteVersion.version);
-      });
-
-      if (!synced) {
-        _setStatus(InitialSyncStatus.failed);
-        final error = MaxRetriesExceededException(
-          'Initial sync failed for feature: $featureKey',
-        );
-        _emitEvent(InitialSyncFailedEvent(
-          featureKey: featureKey,
-          error: error,
-        ));
-        throw error;
+      if (_isCancelled) {
+        throw OperationCancelledException('Sync cancelled before trying');
       }
 
-      _setStatus(InitialSyncStatus.completed);
+      // Step 1: Get last sync cursor for incremental fetch
+      String? cursor = await handler.getLastSyncCursor();
+      // Step 2: Fetch all pages from remote (efficient paginated fetch)
+      while (true) {
+        if (_isCancelled) {
+          throw OperationCancelledException('Sync cancelled during pagination');
+        }
+        final batchResult = await _attemptWithPolicy(() async {
+          if (_isCancelled) {
+            throw OperationCancelledException(
+                "Operation was cancelled before fetch");
+          }
+          return await handler.getRemote(cursor: cursor);
+        });
+        if (batchResult == null) {
+          throw MaxRetriesExceededException(
+            'Failed to fetch page for feature: $featureKey',
+          );
+        }
+        if (_isCancelled) {
+          throw OperationCancelledException('Sync cancelled after fetch');
+        }
+
+        // Step 3: Apply changes in bulk (efficient batch write)
+        if (batchResult.items.isNotEmpty) {
+          final applyResult = await handler.applyToLocal(batchResult.items);
+          if (!applyResult.success) {
+            throw SyncFailedException(
+              'Failed to apply batch to local for feature: $featureKey. '
+              'Errors: ${applyResult.errors.map((e) => e.message).join(', ')}',
+            );
+          }
+        }
+
+        // Step 4: Update cursor to continue from this batch
+        if (batchResult.nextCursor != null) {
+          await handler.updateLastSyncCursor(batchResult.nextCursor!);
+        }
+
+        // Step 5: Check if there are more pages
+        if (batchResult.nextCursor == null) {
+          break; // No more pages, sync complete
+        }
+        cursor = batchResult.nextCursor;
+      }
+
+      _featureStatuses[featureKey] = InitialSyncStatus.completed;
       _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
     } catch (e) {
       final st = StackTrace.current;
       if (_status != InitialSyncStatus.cancelled) {
-        _setStatus(InitialSyncStatus.failed);
+        _featureStatuses[featureKey] = InitialSyncStatus.failed;
         if (!_statusController.isClosed) _statusController.addError(e, st);
       }
       rethrow;
-    } finally {
-      _isRunning = false;
     }
-  }
-
-  /// Determine resolution strategy for logging purposes.
-  String _getResolutionStrategy(MergeResult result) {
-    if (result.toApplyLocally.isEmpty && result.toApplyRemotely.isNotEmpty) {
-      return 'local-wins';
-    } else if (result.toApplyLocally.isNotEmpty && 
-               result.toApplyRemotely.isEmpty) {
-      return 'remote-wins';
-    } else if (result.toApplyLocally.isNotEmpty && 
-               result.toApplyRemotely.isNotEmpty) {
-      return 'merge-both';
-    }
-    return 'no-change';
   }
 
   @override
@@ -246,23 +207,28 @@ class InitialSyncManager implements InitialSyncService {
     _eventController.close();
   }
 
-  Future<bool> _attemptWithPolicy(Future<void> Function() operation) async {
+  Future<T?> _attemptWithPolicy<T>(Future<T> Function() operation) async {
     int attempt = 0;
 
     while (!_isCancelled) {
       try {
-        await operation();
-        return true;
+        return await operation();
       } catch (_) {
         attempt++;
-        if (attempt > _maxRetries) return false;
-
+        if (attempt > _maxRetries) return null;
         final d = _backoff.nextDelay(attempt);
-        if (d > Duration.zero) await Future.delayed(d);
+        if (d > Duration.zero) {
+          await Future.any([
+            Future.delayed(d),
+            Future(() => _isCancelled
+                ? throw OperationCancelledException("Operation was cancelled")
+                : null)
+          ]);
+        }
       }
     }
 
-    return false;
+    return null;
   }
 
   void _setStatus(InitialSyncStatus s) {

@@ -9,3 +9,12 @@
 
 ## 0.3.0 - 2026-02-10
 - Change main parameter to make easy to use
+
+## 0.4.0 - 2026-02-15
+- **Major API refactoring**: Replaced `FeroCoordinator` with simplified `FeroSync` class
+- **Added conflict resolution**: Introduced multiple conflict resolution strategies (server wins, client wins, merge both, highest version wins)
+- **Added sync event system**: New event-based architecture for tracking sync lifecycle (InitialSyncRequired, Started, Completed, Failed events)
+- **Enhanced sync handlers**: Improved `SyncHandler` with conflict resolution and versioning support
+- **Improved initial sync**: Enhanced initial sync algorithm with queue-based processing
+- **Breaking change**: Removed `sync_coordinator.dart` and `sync_meta_data_repository.dart` in favor of new architecture
+- Updated example to demonstrate new API with conflict resolution and event handling

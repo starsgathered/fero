@@ -13,9 +13,11 @@ abstract class InitialSyncService {
   /// Stream of sync events (from server and local operations).
   Stream<SyncEvent> get eventStream;
 
-  /// Register a feature for initial sync.
-  /// The feature will automatically sync when [InitialSyncRequiredEvent] is received.
-  void registerFeature(String featureKey);
+  /// Run initial sync for all handlers.
+  Future<void> run();
+
+  /// Get the sync status for a specific feature.
+  InitialSyncStatus? getFeatureStatus(String featureKey);
 
   /// Listen to incoming sync events from Fero server.
   /// This should be called once during app initialization.

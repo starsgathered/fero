@@ -32,26 +32,8 @@ class InitialSyncFailedEvent extends SyncEvent {
   final Exception error;
 
   InitialSyncFailedEvent({
-    required String featureKey,
+    required super.featureKey,
     required this.error,
-    DateTime? timestamp,
-  }) : super(featureKey: featureKey, timestamp: timestamp);
-}
-
-/// Event emitted when sync conflicts are detected during merge.
-/// This allows apps to track and analyze conflicting changes.
-class SyncConflictDetectedEvent extends SyncEvent {
-  final List<String> conflictingIds; // IDs of entities with conflicts
-  final int localChangesCount;       // Number of local changes
-  final int remoteChangesCount;      // Number of remote changes
-  final String resolutionStrategy;   // How conflicts were resolved
-
-  SyncConflictDetectedEvent({
-    required String featureKey,
-    required this.conflictingIds,
-    required this.localChangesCount,
-    required this.remoteChangesCount,
-    required this.resolutionStrategy,
-    DateTime? timestamp,
-  }) : super(featureKey: featureKey, timestamp: timestamp);
+    super.timestamp,
+  });
 }
