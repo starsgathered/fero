@@ -18,3 +18,6 @@
 - **Improved initial sync**: Enhanced initial sync algorithm with queue-based processing
 - **Breaking change**: Removed `sync_coordinator.dart` and `sync_meta_data_repository.dart` in favor of new architecture
 - Updated example to demonstrate new API with conflict resolution and event handling
+
+## 0.4.1 - 2026-02-15
+- Updated example usage
