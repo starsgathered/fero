@@ -27,3 +27,6 @@
 
 ## 0.4.3 - 2026-02-15
 - Added RetryConfig
+
+## 0.4.4 - 2026-02-17
+- Remove unessary code from InitialSyncManager

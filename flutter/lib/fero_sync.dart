@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:fero_sync/core/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/sync_event.dart';
-import 'package:fero_sync/core/sync_handler.dart';
+import 'package:fero_sync/core/initial_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 
@@ -22,10 +22,10 @@ class FeroSync {
   final SyncMetaDataRepo metadataRepo;
 
   /// Map of feature keys to their respective handlers
-  final Map<String, SyncHandler> initialSyncHandlers;
+  final Map<String, InitialSyncHandler> initialSyncHandlers;
 
   /// Strategy to handle retries/backoff for failed sync attempts
-  final BackoffStrategy backoffStrategy;
+  final RetryPolicy retryPolicy;
 
   /// Strategy to resolve conflicts between local and remote data
   final ConflictResolutionStrategy conflictStrategy;
@@ -42,7 +42,7 @@ class FeroSync {
   /// Private constructor to enforce usage of the async factory `create`
   FeroSync._({
     required this.initialSyncHandlers,
-    required this.backoffStrategy,
+    required this.retryPolicy,
     required this.conflictStrategy,
     required this.batchSize,
     required this.maxBatchSize,
@@ -53,16 +53,18 @@ class FeroSync {
   /// Factory method to create an instance of FeroSync asynchronously
   /// Sets default backoff and conflict resolution strategies if none are provided
   static Future<FeroSync> create({
-    required Map<String, SyncHandler> initialSyncHandlers,
+    required Map<String, InitialSyncHandler> initialSyncHandlers,
     required SyncMetaDataRepo metadataRepo,
-    BackoffStrategy? backoffStrategy,
+    RetryPolicy? retryPolicy,
     ConflictResolutionStrategy? conflictStrategy,
     int? batchSize,
     int? maxBatchSize,
     InitialSyncManager? initialManager,
   }) async {
-    final backoff = backoffStrategy ??
-        ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000);
+    final retryPolicyValue = retryPolicy ??
+        RetryPolicy(
+            backoff:
+                ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000));
 
     final strategy =
         conflictStrategy ?? ConflictResolutionStrategy.highestVersionWins;
@@ -74,7 +76,7 @@ class FeroSync {
     final InitialSyncManager initManager = initialManager ??
         InitialSyncManager(
           handlers: initialSyncHandlers,
-          backoffStrategy: backoff,
+          retryPolicy: retryPolicyValue,
           maxRetries: 5,
           batchSize: bs,
           maxBatchSize: mbs,
@@ -83,7 +85,7 @@ class FeroSync {
 
     return FeroSync._(
       initialSyncHandlers: initialSyncHandlers,
-      backoffStrategy: backoff,
+      retryPolicy: retryPolicyValue,
       conflictStrategy: strategy,
       batchSize: bs,
       maxBatchSize: mbs,

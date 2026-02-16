@@ -1,4 +1,4 @@
-import 'package:fero_sync/core/sync_handler.dart';
+import 'package:fero_sync/core/syncable.dart';
 
 /// Defines how to resolve conflicts when both local and remote have changes.
 enum ConflictResolutionStrategy {

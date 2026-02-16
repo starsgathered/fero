@@ -1,6 +1,10 @@
 import 'dart:async';
-import 'package:fero_sync/core/sync_handler.dart';
+import 'package:fero_sync/core/apply_result.dart';
+import 'package:fero_sync/core/initial_sync_handler.dart';
+import 'package:fero_sync/core/sync_batch_result.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
+import 'package:fero_sync/core/sync_payload.dart';
+import 'package:fero_sync/core/syncable.dart';
 import 'package:fero_sync/fero_sync.dart';
 
 /// ----------------------------
@@ -37,15 +41,10 @@ class Task implements Syncable {
 /// 2. Sync Handlers
 /// ----------------------------
 
-class ContactsSyncHandler extends SyncHandler {
+class ContactsSyncHandler extends InitialSyncHandler {
   final List<Contact> _localContacts = [
     Contact(id: '1', name: 'Alice', version: 1),
   ];
-
-  @override
-  Future<List<SyncPayload<Syncable>>> getLocal() async {
-    return _localContacts.map((c) => SyncPayload<Syncable>(data: c)).toList();
-  }
 
   @override
   Future<SyncBatchResult> getRemote({String? cursor, int? batchSize}) async {
@@ -72,13 +71,6 @@ class ContactsSyncHandler extends SyncHandler {
         _localContacts.add(contact);
       }
     }
-    return ApplyResult.success();
-  }
-
-  @override
-  Future<ApplyResult> applyToRemote(
-      List<SyncPayload<Syncable>> localStates) async {
-    // Normally, you’d call an API here
     return ApplyResult.success();
   }
 }

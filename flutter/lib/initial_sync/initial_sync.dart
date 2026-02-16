@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:fero_sync/core/backoff.dart';
 import 'package:fero_sync/core/exceptions.dart';
 import 'package:fero_sync/core/sync_event.dart';
-import 'package:fero_sync/core/sync_handler.dart';
+import 'package:fero_sync/core/initial_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
@@ -12,7 +12,7 @@ import 'package:fero_sync/core/sync_metadata_repo.dart';
 /// Listens to [InitialSyncRequiredEvent] from Fero server and orchestrates sync.
 /// Automatically handles log storage and conflict tracking.
 class InitialSyncManager implements InitialSyncService {
-  final Map<String, SyncHandler> _handlers;
+  final Map<String, InitialSyncHandler> _handlers;
   final RetryPolicy _retryPolicy;
   final int batchSize;
   final int maxBatchSize;
@@ -30,18 +30,19 @@ class InitialSyncManager implements InitialSyncService {
   final Map<String, InitialSyncStatus> _featureStatuses = {};
 
   InitialSyncManager({
-    required Map<String, SyncHandler> handlers,
-    BackoffStrategy? backoffStrategy,
+    required Map<String, InitialSyncHandler> handlers,
+    RetryPolicy? retryPolicy,
     int maxRetries = 5,
     required this.batchSize,
     required this.maxBatchSize,
     required this.metaRepo,
   })  : _handlers = Map.unmodifiable(handlers),
-        _retryPolicy = RetryPolicy(
-          backoff: backoffStrategy ??
-              ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
-          maxRetries: maxRetries,
-        );
+        _retryPolicy = retryPolicy ??
+            RetryPolicy(
+              backoff:
+                  ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
+              maxRetries: maxRetries,
+            );
 
   @override
   InitialSyncStatus get status => _status;

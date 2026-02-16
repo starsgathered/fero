@@ -1,16 +1,18 @@
 import 'dart:async';
 
+import 'package:fero_sync/core/background_sync_handler.dart';
 import 'package:fero_sync/core/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/exceptions.dart';
 import 'package:fero_sync/core/sync_event.dart';
-import 'package:fero_sync/core/sync_handler.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
+import 'package:fero_sync/core/sync_payload.dart';
+import 'package:fero_sync/core/syncable.dart';
 
 /// Incremental sync manager for background/continuous syncing.
 /// Handles priority-based and concurrent sync operations with backoff.
 class BackgroundSyncManager {
-  final Map<String, SyncHandler> _handlers;
+  final Map<String, BackgroundSyncHandler> _handlers;
   final Map<String, int> _handlerPriorities; // Higher = syncs first
   final SyncMetaDataRepo metaRepo;
   final RetryPolicy _retryPolicy;
@@ -26,7 +28,7 @@ class BackgroundSyncManager {
   final List<String> _pendingQueue = []; // Ordered by priority
 
   BackgroundSyncManager({
-    required Map<String, SyncHandler> handlers,
+    required Map<String, BackgroundSyncHandler> handlers,
     Map<String, int>? handlerPriorities,
     required this.metaRepo,
     BackoffStrategy? backoffStrategy,
