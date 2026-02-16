@@ -1,4 +1,4 @@
-// conflict_resolution works on integer versions only; no import required
+import 'package:fero_sync/core/sync_handler.dart';
 
 /// Defines how to resolve conflicts when both local and remote have changes.
 enum ConflictResolutionStrategy {
@@ -12,7 +12,7 @@ enum ConflictResolutionStrategy {
   mergeBoth,
 
   /// Version-based resolution: higher version wins (Fero server is source of truth).
-  /// If versions are equal, timestamp is used as tiebreaker.
+  /// If versions are equal, syncId is used as tiebreaker (lexicographically higher wins).
   highestVersionWins,
 }
 
@@ -36,10 +36,10 @@ enum ResolutionWinner { local, remote, merge, none }
 
 /// Helper class to apply conflict resolution strategies on version objects.
 class ConflictResolver {
-  /// Apply the given strategy to resolve version conflicts.
-  static VersionResolution resolveVersions({
-    required int localVersion,
-    required int remoteVersion,
+  /// Apply the given strategy to resolve conflicts between local and remote Syncable objects.
+  static VersionResolution resolve({
+    required Syncable local,
+    required Syncable remote,
     required ConflictResolutionStrategy strategy,
   }) {
     switch (strategy) {
@@ -47,7 +47,7 @@ class ConflictResolver {
         return VersionResolution(
           applyLocal: false,
           applyRemote: true,
-          hasConflict: remoteVersion > localVersion,
+          hasConflict: remote.version > local.version,
           winner: ResolutionWinner.remote,
         );
 
@@ -55,7 +55,7 @@ class ConflictResolver {
         return VersionResolution(
           applyLocal: true,
           applyRemote: false,
-          hasConflict: localVersion > remoteVersion,
+          hasConflict: local.version > remote.version,
           winner: ResolutionWinner.local,
         );
 
@@ -63,27 +63,27 @@ class ConflictResolver {
         return VersionResolution(
           applyLocal: true,
           applyRemote: true,
-          hasConflict: localVersion != remoteVersion,
+          hasConflict: local.version != remote.version,
           winner: ResolutionWinner.merge,
         );
 
       case ConflictResolutionStrategy.highestVersionWins:
-        return _resolveByHighestVersion(localVersion, remoteVersion);
+        return _resolveByHighestVersion(local, remote);
     }
   }
 
   /// Implementation of highest-version-wins: higher version is authoritative.
-  /// Version is the primary ordering key.
+  /// If versions are equal, syncId is used as tiebreaker (lexicographically higher wins).
   static VersionResolution _resolveByHighestVersion(
-      int localVersion, int remoteVersion) {
-    if (remoteVersion > localVersion) {
+      Syncable local, Syncable remote) {
+    if (remote.version > local.version) {
       return VersionResolution(
         applyLocal: false,
         applyRemote: true,
         hasConflict: true,
         winner: ResolutionWinner.remote,
       );
-    } else if (localVersion > remoteVersion) {
+    } else if (local.version > remote.version) {
       return VersionResolution(
         applyLocal: true,
         applyRemote: false,
@@ -91,13 +91,33 @@ class ConflictResolver {
         winner: ResolutionWinner.local,
       );
     } else {
-      // Versions equal - no action needed
-      return VersionResolution(
-        applyLocal: false,
-        applyRemote: false,
-        hasConflict: false,
-        winner: ResolutionWinner.none,
-      );
+      // Versions equal - use syncId as tiebreaker
+      final comparison = remote.syncId.compareTo(local.syncId);
+      if (comparison > 0) {
+        // Remote syncId is lexicographically higher
+        return VersionResolution(
+          applyLocal: false,
+          applyRemote: true,
+          hasConflict: true,
+          winner: ResolutionWinner.remote,
+        );
+      } else if (comparison < 0) {
+        // Local syncId is lexicographically higher
+        return VersionResolution(
+          applyLocal: true,
+          applyRemote: false,
+          hasConflict: true,
+          winner: ResolutionWinner.local,
+        );
+      } else {
+        // Same version and same syncId - no action needed
+        return VersionResolution(
+          applyLocal: false,
+          applyRemote: false,
+          hasConflict: false,
+          winner: ResolutionWinner.none,
+        );
+      }
     }
   }
 }

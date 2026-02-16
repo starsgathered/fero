@@ -13,8 +13,7 @@ import 'package:fero_sync/core/sync_metadata_repo.dart';
 /// Automatically handles log storage and conflict tracking.
 class InitialSyncManager implements InitialSyncService {
   final Map<String, SyncHandler> _handlers;
-  final BackoffStrategy _backoff;
-  final int _maxRetries;
+  final RetryPolicy _retryPolicy;
   final int batchSize;
   final int maxBatchSize;
   final SyncMetaDataRepo metaRepo;
@@ -38,9 +37,11 @@ class InitialSyncManager implements InitialSyncService {
     required this.maxBatchSize,
     required this.metaRepo,
   })  : _handlers = Map.unmodifiable(handlers),
-        _backoff = backoffStrategy ??
-            ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
-        _maxRetries = maxRetries;
+        _retryPolicy = RetryPolicy(
+          backoff: backoffStrategy ??
+              ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
+          maxRetries: maxRetries,
+        );
 
   @override
   InitialSyncStatus get status => _status;
@@ -153,13 +154,17 @@ class InitialSyncManager implements InitialSyncService {
         if (_isCancelled) {
           throw OperationCancelledException('Sync cancelled during pagination');
         }
-        final batchResult = await _attemptWithPolicy(() async {
-          if (_isCancelled) {
-            throw OperationCancelledException(
-                "Operation was cancelled before fetch");
-          }
-          return await handler.getRemote(cursor: cursor, batchSize: batchSize);
-        });
+        final batchResult = await _retryPolicy.attempt(
+          () async {
+            if (_isCancelled) {
+              throw OperationCancelledException(
+                  "Operation was cancelled before fetch");
+            }
+            return await handler.getRemote(
+                cursor: cursor, batchSize: batchSize);
+          },
+          isCancelled: () => _isCancelled,
+        );
         if (batchResult == null) {
           throw MaxRetriesExceededException(
             'Failed to fetch page for feature: $featureKey',
@@ -224,30 +229,6 @@ class InitialSyncManager implements InitialSyncService {
   void dispose() {
     _statusController.close();
     _eventController.close();
-  }
-
-  Future<T?> _attemptWithPolicy<T>(Future<T> Function() operation) async {
-    int attempt = 0;
-
-    while (!_isCancelled) {
-      try {
-        return await operation();
-      } catch (_) {
-        attempt++;
-        if (attempt > _maxRetries) return null;
-        final d = _backoff.nextDelay(attempt);
-        if (d > Duration.zero) {
-          await Future.any([
-            Future.delayed(d),
-            Future(() => _isCancelled
-                ? throw OperationCancelledException("Operation was cancelled")
-                : null)
-          ]);
-        }
-      }
-    }
-
-    return null;
   }
 
   void _setStatus(InitialSyncStatus s) {

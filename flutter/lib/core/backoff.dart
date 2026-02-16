@@ -55,3 +55,39 @@ class ExponentialBackoffStrategy implements BackoffStrategy {
     return Duration(milliseconds: jitter);
   }
 }
+
+/// Reusable retry helper with backoff strategy.
+/// Returns null if all retries fail or operation is cancelled.
+class RetryPolicy {
+  final BackoffStrategy backoff;
+  final int maxRetries;
+
+  RetryPolicy({
+    required this.backoff,
+    this.maxRetries = 3,
+  });
+
+  /// Attempt operation with retries and backoff.
+  /// [isCancelled] optional callback to check for cancellation.
+  Future<T?> attempt<T>(
+    Future<T> Function() operation, {
+    bool Function()? isCancelled,
+  }) async {
+    int attempt = 0;
+
+    while (true) {
+      if (isCancelled?.call() ?? false) return null;
+
+      try {
+        return await operation();
+      } catch (_) {
+        attempt++;
+        if (attempt > maxRetries) return null;
+        final delay = backoff.nextDelay(attempt);
+        if (delay > Duration.zero) {
+          await Future.delayed(delay);
+        }
+      }
+    }
+  }
+}
