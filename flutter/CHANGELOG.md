@@ -24,3 +24,6 @@
 
 ## 0.4.2 - 2026-02-15
 - Updated Readme.md
+
+## 0.4.3 - 2026-02-15
+- Added RetryConfig
