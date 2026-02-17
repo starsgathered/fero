@@ -1,434 +1,327 @@
-# Fero (Flutter)
+# Fero
 
-**Fero** is a **Flutter/Dart sync orchestration library** that helps you run **reliable, bidirectional sync flows** using a clean, version-based conflict resolution architecture.
+**Fero** is a **Flutter/Dart offline-first sync library** that orchestrates bidirectional data synchronization between your app and server with built-in conflict resolution, retry logic, and pagination support.
 
-Fero separates concerns:
+## Features
 
-* **Sync execution** (your handlers implementing `SyncHandler`)
-* **Sync orchestration** (Fero's `FeroSync` class)
-* **Versioning & conflict resolution** (built-in version-tracking semantics)
-
-So your Flutter app code stays simple, testable, and predictable.
-
----
-
-## What Problem Fero Solves
-
-In Flutter apps, initial sync logic often becomes:
-
-* Scattered across screens
-* Tightly coupled to UI lifecycle
-* Hard to retry or cancel
-* Difficult to test
-
-Fero centralizes this logic into a **single orchestration layer**.
+- ✅ **Initial Sync** - Load essential data on first install or login
+- ✅ **Background Sync** - Keep data fresh with incremental updates
+- ✅ **Version-based Conflict Resolution** - Automatic conflict handling using server versions
+- ✅ **Checkpoint Pagination** - Resume sync from exact point after interruption
+- ✅ **Retry & Backoff** - Configurable exponential backoff for failed operations
+- ✅ **Event Streams** - Observable sync events for UI updates
+- ✅ **Dependency Management** - Sync features in order with dependencies
+- ✅ **Type-Safe** - Separate LocalItem and ServerItem types for clarity
 
 ---
 
-## Flutter-Specific Design
+## Why Fero?
 
-Fero is designed around **Flutter async patterns**:
+Building offline-first Flutter apps is hard. Fero solves common sync challenges:
 
-* `Future`-based execution
-* `Stream`-based status updates
-* Pure Dart handlers
-* No isolates, no platform channels
-* Works with Riverpod / Bloc / Provider
+| Problem | Fero Solution |
+|---------|---------------|
+| Sync logic scattered across UI | Centralized sync orchestration |
+| Complex retry logic | Built-in exponential backoff |
+| Conflict resolution bugs | Version-based conflict strategy |
+| Interrupted syncs lose progress | Checkpoint-based pagination |
+| Tightly coupled code | Clean handler interfaces |
+| Hard to test | Pure business logic handlers |
 
 ---
 
-## Core Concepts
+## Quick Start
 
-### Syncable
+### 1. Add Dependency
 
-Base interface for any object that can be synced.
-
-```dart
-abstract class Syncable {
-  String get syncId;      // Unique identifier for the item
-  int get version;        // Server-assigned version number
-}
+```yaml
+dependencies:
+  fero_sync: ^0.4.5
 ```
 
-Every syncable object must have:
+### 2. Define Your Data Models
 
-* **syncId**: Unique identifier for ordering and conflict detection
-* **version**: Server-assigned version for deterministic ordering and conflict resolution
-
-Why versions instead of timestamps?
-* Server is the source of truth
-* Deterministic ordering (version X always comes before version X+1)
-* Works offline-first and in distributed scenarios
-* Enables reliable conflict resolution
-
----
-
-### SyncPayload
-
-Generic container for feature data and metadata.
+Create separate types for local and server items:
 
 ```dart
-class SyncPayload<T extends Syncable> {
-  final T data;
-  
-  SyncPayload({required this.data});
-}
-```
-
-Keeps business data separate from sync orchestration concerns.
-
----
-
-### SyncBatchResult
-
-Result of fetching a batch of items from remote or local storage.
-
-```dart
-class SyncBatchResult {
-  final List<SyncPayload<Syncable>> items;
-  final String? nextCursor;  // For pagination
-  
-  SyncBatchResult({
-    required this.items,
-    this.nextCursor,
-  });
-}
-```
-
----
-
-### ApplyResult
-
-Result of applying changes to local or remote storage.
-
-```dart
-class ApplyResult {
-  final bool success;
-  final List<ApplyError> errors;
-  
-  ApplyResult({
-    required this.success,
-    this.errors = const [],
-  });
-}
-```
-
-Provides detailed error information for failed items.
-
----
-
-### SyncHandler
-
-Contract for implementing feature-specific sync logic.
-
-```dart
-abstract class SyncHandler {
-  /// Get all local items for this feature
-  Future<List<SyncPayload<Syncable>>> getLocal();
-
-  /// Get the last sync cursor (null if never synced)
-  Future<String?> getLastSyncCursor();
-
-  /// Update the last sync cursor after successful sync
-  Future<void> updateLastSyncCursor(String cursor);
-
-  /// Fetch remote items with optional pagination
-  Future<SyncBatchResult> getRemote({String? cursor});
-
-  /// Apply remote items to local storage
-  Future<ApplyResult> applyToLocal(List<SyncPayload<Syncable>> remoteStates);
-
-  /// Apply local items to remote storage
-  Future<ApplyResult> applyToRemote(List<SyncPayload<Syncable>> localStates);
-}
-```
-
-Handlers:
-
-* Are **stateless** and reusable
-* Contain only **business logic**
-* Never modify sync state directly
-* Can be tested independently
-
----
-
-### ConflictResolutionStrategy
-
-Determines how to handle conflicting versions between local and remote.
-
-```dart
-enum ConflictResolutionStrategy {
-  highestVersionWins,  // Remote data with higher version wins
-  // More strategies coming soon
-}
-```
-
-Applied automatically during sync orchestration.
-
----
-
-### BackoffStrategy
-
-Controls retry behavior for failed sync operations.
-
-```dart
-// Fixed backoff: always wait the same duration
-FixedBackoffStrategy(baseMillis: 500)
-
-// Exponential backoff: double wait time after each retry
-ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000)
-```
-
----
-
-### FeroSync
-
-Main orchestrator for running sync operations.
-
-```dart
-final feroSync = await FeroSync.create(
-  handlers: {
-    'contacts': ContactsSyncHandler(),
-    'messages': MessagesSyncHandler(),
-  },
-  backoffStrategy: ExponentialBackoffStrategy(
-    baseMillis: 100,
-    maxMillis: 30000,
-  ),
-  conflictStrategy: ConflictResolutionStrategy.highestVersionWins,
-);
-```
-
-Responsibilities:
-
-* Orchestrates sync across multiple features
-* Applies retry and backoff strategies
-* Resolves conflicts using configured strategy
-* Emits status and event streams for UI or logging
-* Manages lifecycle (start, run, cancel, dispose)
-
----
-
-## Example Usage in Flutter
-
-### 1. Define a Syncable Data Model
-
-Your business objects must implement `Syncable`:
-
-```dart
-class Contact implements Syncable {
+// Local item (on device)
+class LocalContact implements LocalItem {
+  @override
   final String id;
+  @override
+  final int version;
+  @override
+  final bool locallyModified;
+  
   final String name;
   final String email;
-  final int version;
 
-  Contact({
+  LocalContact({
     required this.id,
     required this.name,
     required this.email,
     required this.version,
+    this.locallyModified = false,
   });
+}
 
+// Server item (from backend)
+class ServerContact implements ServerItem {
   @override
-  String get syncId => id;
+  final String id;
+  @override
+  final int syncId;        // Monotonic ID for pagination
+  @override
+  final int version;
+  @override
+  final DateTime updatedAt; // When last updated on server
+  
+  final String name;
+  final String email;
 
-  @override
-  int get version => version;
+  ServerContact({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.syncId,
+    required this.version,
+    required this.updatedAt,
+  });
 }
 ```
 
----
+### 3. Implement Sync Handlers
 
-### 2. Implement a SyncHandler
-
-Implement all six methods required by `SyncHandler`:
+**Initial Sync Handler** (for first-time data load):
 
 ```dart
-class ContactsSyncHandler implements SyncHandler {
-  final LocalDatabase localDb;
-  final RemoteApi remoteApi;
-
-  ContactsSyncHandler({
-    required this.localDb,
-    required this.remoteApi,
-  });
-
+class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
   @override
-  Future<List<SyncPayload<Syncable>>> getLocal() async {
-    final contacts = await localDb.getContacts();
-    return contacts
-        .map((c) => SyncPayload(data: c))
-        .toList();
-  }
-
-  @override
-  Future<String?> getLastSyncCursor() async {
-    return await localDb.getContactsSyncCursor();
-  }
-
-  @override
-  Future<void> updateLastSyncCursor(String cursor) async {
-    await localDb.saveContactsSyncCursor(cursor);
-  }
-
-  @override
-  Future<SyncBatchResult> getRemote({String? cursor}) async {
-    final batch = await remoteApi.fetchContacts(cursor: cursor);
+  Future<SyncBatchResult> fetchRemoteData({
+    SyncCheckpoint? checkpoint,
+    required int batchSize,
+  }) async {
+    // Load from server: WHERE syncId > checkpoint.lastSyncId LIMIT batchSize
+    final prefs = await api.fetchUserPreferences();
+    
     return SyncBatchResult(
-      items: batch.contacts
-          .map((c) => SyncPayload(data: c))
-          .toList(),
-      nextCursor: batch.nextCursor,
+      items: prefs.map((p) => SyncPayload<ServerItem>(data: p)).toList(),
+      checkpoint: SyncCheckpoint(
+        lastSyncId: prefs.last.syncId,
+        updatedAt: prefs.last.updatedAt,
+      ),
     );
   }
 
   @override
-  Future<ApplyResult> applyToLocal(
-    List<SyncPayload<Syncable>> remoteStates,
-  ) async {
-    try {
-      final contacts = remoteStates
-          .map((p) => p.data as Contact)
-          .toList();
-      await localDb.saveContacts(contacts);
-      return ApplyResult.success();
-    } catch (e) {
-      return ApplyResult.failure([
-        ApplyError(
-          message: 'Failed to save contacts: $e',
-          code: 'SAVE_ERROR',
-        ),
-      ]);
-    }
-  }
-
-  @override
-  Future<ApplyResult> applyToRemote(
-    List<SyncPayload<Syncable>> localStates,
-  ) async {
-    try {
-      final contacts = localStates
-          .map((p) => p.data as Contact)
-          .toList();
-      await remoteApi.uploadContacts(contacts);
-      return ApplyResult.success();
-    } catch (e) {
-      return ApplyResult.failure([
-        ApplyError(
-          message: 'Failed to upload contacts: $e',
-          code: 'UPLOAD_ERROR',
-        ),
-      ]);
-    }
+  Future<ApplyResult> saveToLocal(List<SyncPayload<ServerItem>> data) async {
+    await db.saveUserPreferences(data);
+    return ApplyResult.success();
   }
 }
 ```
 
----
+**Background Sync Handler** (for incremental updates):
 
-### 3. Create and Configure FeroSync
+```dart
+class ContactSyncHandler extends BackgroundSyncHandler {
+  @override
+  Future<List<SyncPayload<LocalItem>>> getLocallyModified() async {
+    // Get items that need syncing
+    final contacts = await db.getModifiedContacts();
+    return contacts.map((c) => SyncPayload<LocalItem>(data: c)).toList();
+  }
+
+  @override
+  Future<SyncBatchResult> fetchRemoteChanges({
+    SyncCheckpoint? checkpoint,
+    required int batchSize,
+  }) async {
+    // Fetch from server with pagination
+    final contacts = await api.fetchContacts(
+      afterSyncId: checkpoint?.lastSyncId,
+      limit: batchSize,
+    );
+    
+    return SyncBatchResult(
+      items: contacts.map((c) => SyncPayload<ServerItem>(data: c)).toList(),
+      checkpoint: contacts.isNotEmpty
+          ? SyncCheckpoint(
+              lastSyncId: contacts.last.syncId,
+              updatedAt: contacts.last.updatedAt,
+            )
+          : null,
+    );
+  }
+
+  @override
+  Future<ApplyResult> applyRemoteChanges(List<SyncPayload<ServerItem>> data) async {
+    await db.saveContacts(data);
+    return ApplyResult.success();
+  }
+
+  @override
+  Future<ApplyResult> pushLocalChanges(List<SyncPayload<LocalItem>> data) async {
+    await api.uploadContacts(data);
+    return ApplyResult.success();
+  }
+}
+```
+
+### 4. Initialize FeroSync
 
 ```dart
 final feroSync = await FeroSync.create(
-  handlers: {
-    'contacts': ContactsSyncHandler(
-      localDb: database,
-      remoteApi: apiClient,
-    ),
-    'messages': MessagesSyncHandler(
-      localDb: database,
-      remoteApi: apiClient,
+  // Initial sync: Essential data loaded on first login
+  initialSyncConfigs: {
+    'user_preferences': FeatureInitialSyncConfig(
+      handler: UserPreferencesInitialSyncHandler(),
+      priority: 100,
     ),
   },
-  backoffStrategy: ExponentialBackoffStrategy(
-    baseMillis: 100,
-    maxMillis: 30000,
-  ),
+  // Background sync: Incremental updates
+  backgroundSyncConfigs: {
+    'contacts': FeatureSyncConfig(
+      handler: ContactSyncHandler(),
+      priority: 100,
+    ),
+    'messages': FeatureSyncConfig(
+      handler: MessageSyncHandler(),
+      priority: 90,
+      dependencies: ['contacts'], // Sync contacts first
+    ),
+  },
+  metadataRepo: InMemorySyncMetaDataRepo(),
   conflictStrategy: ConflictResolutionStrategy.highestVersionWins,
 );
 ```
 
----
-
-### 4. Start Sync
+### 5. Start Syncing
 
 ```dart
-// Start listening to events internally
-await feroSync.startSync();
+// Listen to events
+feroSync.backgroundSyncEventStream?.listen((event) {
+  print('Sync event: ${event.runtimeType}');
+});Advanced Usage
 
-// Run the initial sync for all features
-await feroSync.run();
+### Feature Dependencies
+
+Ensure features sync in the correct order:
+
+```dart
+backgroundSyncConfigs: {
+  'users': FeatureSyncConfig(
+    handler: UserSyncHandler(),
+    priority: 100,
+  ),
+  'posts': FeatureSyncConfig(
+    handler: PostSyncHandler(),
+    priority: 90,
+    dependencies: ['users'], // Wait for users first
+  ),
+  'comments': FeatureSyncConfig(
+    handler: CommentSyncHandler(),
+    priority: 80,
+    dependencies: ['posts'], // Wait for posts first
+  ),
+}
 ```
 
----
+### Pagination with Checkpoints
 
-### 5. Listen to Status Updates (UI-friendly)
+Resume sync from where you left off:
 
 ```dart
-// Listen to status changes
-feroSync.statusStream.listen((status) {
-  debugPrint('Sync Status: $status');
-});
+Future<SyncBatchResult> fetchRemoteChanges({
+  SyncCheckpoint? checkpoint,
+  required int batchSize,
+}) async {
+  // Use checkpoint to paginate
+  final afterSyncId = checkpoint?.lastSyncId ?? 0;
+  
+  final items = await api.fetchItems(
+    'SELECT * FROM items WHERE syncId > $afterSyncId LIMIT $batchSize'
+  );
+  
+  return SyncBatchResult(
+    items: items.map((i) => SyncPayload<ServerItem>(data: i)).toList(),
+    checkpoint: items.isNotEmpty
+        ? SyncCheckpoint(
+            lastSyncId: items.last.syncId,
+            updatedAt: items.last.updatedAt,
+          )
+        : null, // null = no more pages
+  );
+}
+```
 
-// Listen to raw events for logging
-feroSync.eventStream.listen((event) {
-  debugPrint('Sync Event: $event');
+### Listen to Sync Events
+
+```dart
+feroSync.backgroundSyncEventStream?.listen((event) {
+  if (event is BackgroundSyncStartedEvent) {
+    print('Started syncing ${event.featureKey}');
+  } else if (event is BackgroundSyncCompletedEvent) {
+    print('Completed syncing ${event.featureKey}');
+  } else if (event is BackgroundSyncFailedEvent) {
+    print('Failed syncing ${event.featureKey}: ${event.error}');
+  }
 });
 ```
 
-Use with Flutter widgets:
+### Custom Metadata Repository
+
+Implement persistent storage for sync metadata:
 
 ```dart
-StreamBuilder<dynamic>(
-  stream: feroSync.statusStream,
+class HiveSyncMetaDataRepo implements SyncMetaDataRepo {
+  @override
+  Future<SyncCheckpoint?> getCheckpoint(String featureKey) async {
+    final box = await Hive.openBox('sync_metadata');
+    final json = box.get('checkpoint_$featureKey');
+    return json != null ? SyncCheckpoint.fromJson(json) : null;
+  }
+
+  @override
+  Future<void> saveCheckpoint(String featureKey, SyncCheckpoint checkpoint) async {
+    final box = await Hive.openBox('sync_metadata');
+    await box.put('checkpoint_$featureKey', checkpoint.toJson());
+  }
+}
+```
+
+### UI Integration
+
+**With StreamBuilder:**
+
+```dart
+StreamBuilder(
+  stream: feroSync.backgroundSyncEventStream,
   builder: (context, snapshot) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
-      return const Text('Syncing...');
+    if (snapshot.hasData) {
+      final event = snapshot.data;
+      if (event is BackgroundSyncStartedEvent) {
+        return CircularProgressIndicator();
+      }
     }
-    return const Text('Sync Complete');
+    return Text('Synced');
   },
 )
 ```
 
-Or with Riverpod:
+**With Riverpod:**
 
 ```dart
-final syncStatusProvider = StreamProvider((ref) {
-  return feroSync.statusStream;
+final syncEventsProvider = StreamProvider((ref) {
+  return feroSync.backgroundSyncEventStream!;
 });
-```
 
----
-
-### 6. Trigger Sync for Specific Features
-
-```dart
-// Manually trigger initial sync for a feature
-feroSync.triggerInitialSync('contacts');
-
-// Emit a custom sync event
-feroSync.emitSyncEvent(InitialSyncRequiredEvent(featureKey: 'messages'));
-```
-
----
-
-### 7. Cancel and Dispose
-
-```dart
-// Cancel ongoing sync operations
-feroSync.cancel();
-
-// Clean up resources
-feroSync.dispose();
-```
-
----
-
-## Retry & Backoff Strategy
-
-Retries are automatic and configurable:
-
-```dart
+// In your widget
+ref.watch(syncEventsProvider).when(
+  data: (event) => Text('Event: ${event.runtimeType}'),
+  loading: () => CircularProgressIndicator(),
+  error: (e, s) => Text('Error: $e'),
+dart
 // Fixed backoff: always wait 500ms between retries
 final backoff = FixedBackoffStrategy(baseMillis: 500);
 
@@ -679,29 +572,129 @@ await coordinator.runInitialIfNeeded('user_123', ['contacts']);
 
 ### After (New API)
 
-```dart
-final feroSync = await FeroSync.create(handlers: {...});
-await feroSync.startSync();
-await feroSync.run();
+```Architecture
+
+Fero separates concerns into clear layers:
+
+
+┌─────────────────────────────────────┐
+│      Your Flutter App (UI)          │
+│   StreamBuilder / Riverpod / Bloc   │
+└──────────────┬──────────────────────┘
+               │ Events
+         ┌─────▼──────────┐
+         │   FeroSync     │
+         │ (Orchestrator) │
+         └─────┬──────────┘
+               │
+    ┌──────────┴──────────┐
+    │                     │
+┌───▼───────────┐   ┌────▼────────────┐
+│ Initial Sync  │   │ Background Sync │
+│ (First load)  │   │ (Incremental)   │
+└───┬───────────┘   └────┬────────────┘
+    │                    │
+    └─────────┬──────────┘
+              │
+    ┌─────────▼─────────────┐
+    │   Your Handlers       │
+    │  (Business Logic)     │
+    │  • fetchRemoteData    │
+    │  • applyRemoteChanges │
+    │  • pushLocalChanges   │
+    └───────────────────────┘
 ```
 
-Key changes:
+### Design Principles
 
-* Use `FeroSync.create()` instead of `FeroCoordinator`
-* Implement all 6 methods in `SyncHandler` (not just `handle()`)
-* Use `Syncable` instead of `SyncItem`
-* Use `SyncPayload<T>` for data containers
-* Version numbers are now required (not timestamps)
+1. **Version-Based Ordering** - Use server-assigned versions (not timestamps) for deterministic conflict resolution
+2. **Checkpoint Pagination** - Resume sync from exact point using monotonic syncId
+3. **Type Safety** - Separate LocalItem and ServerItem types prevent bugs
+4. **Pure Handlers** - Stateless, testable business logic
+5. **Event-Driven** - Observable streams for UI updates
 
 ---
 
-## Status
+## What Fero Does NOT Do
 
-🚧 Active development
-APIs may evolve before stable release.
+- ❌ **No networking** - You implement API calls in handlers
+- ❌ **No database** - You handle local storage (SQLite, Hive, etc.)
+- ❌ **No platform channels** - Pure Dart, cross-platform
+- ❌ **No UI widgets** - You build UI with streams
+
+Fero **orchestrates sync logic** - you handle data storage and network calls.
+
+---
+
+## When to Use Fero
+
+### ✅ Use Fero If:
+
+- Your app needs offline-first sync
+- You have initial data load requirements
+- You need automatic conflict resolution
+- Multiple features require coordinated sync
+- You want testable, maintainable sync logic
+- You need bidirectional sync (upload + download)
+
+### ❌ Skip Fero If:
+
+- You only fetch data once (no sync needed)
+- You use real-time databases (Firebase, Supabase)
+- Simple CRUD without conflicts
+- You prefer UI-driven data fetching
+
+---
+
+## Testing
+
+Handlers are pure business logic, easy to test:
+
+```dart
+test('ContactSyncHandler fetches remote changes', () async {
+  final handler = ContactSyncHandler(db: mockDb, api: mockApi);
+  
+  when(mockApi.fetchContacts(afterSyncId: 0, limit: 50))
+      .thenAnswer((_) async => [
+        ServerContact(id: 'c1', name: 'Alice', syncId: 101, version: 1, updatedAt: DateTime.now()),
+      ]);
+
+  final result = await handler.fetchRemoteChanges(batchSize: 50);
+  
+  expect(result.items.length, 1);
+  expect(result.checkpoint?.lastSyncId, 101);
+});
+```
+
+---
+
+## Examples
+
+See [example/lib/main.dart](example/lib/main.dart) for a complete working example with:
+- User preferences (initial sync)
+- Contacts (background sync)
+- Messages (background sync with dependencies)
+
+---
+
+## Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new features
+4. Submit a pull request
 
 ---
 
 ## License
 
-MIT License
+MIT License - see LICENSE file for details
+
+---
+
+## Support
+
+- 📖 [Documentation](https://github.com/starsgathered/fero)
+- 🐛 [Issue Tracker](https://github.com/starsgathered/fero/issues)
+- 💬 [Discussions](https://github.com/starsgathered/fero/discussions)
