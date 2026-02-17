@@ -1,19 +1,32 @@
 import 'dart:async';
 
-import 'package:fero_sync/core/backoff.dart';
+import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/exceptions.dart';
-import 'package:fero_sync/core/sync_event.dart';
-import 'package:fero_sync/core/initial_sync_handler.dart';
+import 'package:fero_sync/core/events/sync_event.dart';
+import 'package:fero_sync/core/sync_executor.dart';
+import 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
+import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
+
+/// Configuration for a feature's initial sync behavior.
+class FeatureInitialSyncConfig {
+  final InitialSyncHandler handler;
+  final int priority; // Higher = syncs first (optional)
+
+  const FeatureInitialSyncConfig({
+    required this.handler,
+    this.priority = 0,
+  });
+}
 
 /// Event-driven initial sync manager.
 /// Listens to [InitialSyncRequiredEvent] from Fero server and orchestrates sync.
 /// Automatically handles log storage and conflict tracking.
 class InitialSyncManager implements InitialSyncService {
-  final Map<String, InitialSyncHandler> _handlers;
-  final RetryPolicy _retryPolicy;
+  final Map<String, FeatureInitialSyncConfig> _featureConfigs;
+  final SyncExecutor _executor;
   final int batchSize;
   final int maxBatchSize;
   final SyncMetaDataRepo metaRepo;
@@ -27,22 +40,25 @@ class InitialSyncManager implements InitialSyncService {
 
   bool _isRunning = false;
   bool _isCancelled = false;
+  bool _hasEverCompleted = false; // Track if full sync ever completed
   final Map<String, InitialSyncStatus> _featureStatuses = {};
 
   InitialSyncManager({
-    required Map<String, InitialSyncHandler> handlers,
+    required Map<String, FeatureInitialSyncConfig> featureConfigs,
     RetryPolicy? retryPolicy,
     int maxRetries = 5,
     required this.batchSize,
     required this.maxBatchSize,
     required this.metaRepo,
-  })  : _handlers = Map.unmodifiable(handlers),
-        _retryPolicy = retryPolicy ??
-            RetryPolicy(
-              backoff:
-                  ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000),
-              maxRetries: maxRetries,
-            );
+  })  : _featureConfigs = Map.unmodifiable(featureConfigs),
+        _executor = SyncExecutor(
+          retryPolicy: retryPolicy ??
+              RetryPolicy(
+                backoff: ExponentialBackoffStrategy(
+                    baseMillis: 100, maxMillis: 30000),
+                maxRetries: maxRetries,
+              ),
+        );
 
   @override
   InitialSyncStatus get status => _status;
@@ -65,7 +81,26 @@ class InitialSyncManager implements InitialSyncService {
     _setStatus(InitialSyncStatus.running);
 
     try {
-      final featuresToSync = _handlers.keys.toList();
+      final featuresToSync = _featureConfigs.keys.toList();
+
+      // Check if all features are already completed (optimized batch check)
+      final allCompleted =
+          await metaRepo.areAllInitialSyncsCompleted(featuresToSync);
+
+      // If all features already synced, emit events for consistency and skip sync
+      if (allCompleted) {
+        _setStatus(InitialSyncStatus.completed);
+
+        // Emit individual feature events for consistency
+        for (final featureKey in featuresToSync) {
+          _featureStatuses[featureKey] = InitialSyncStatus.completed;
+          _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
+        }
+        // Already completed before, emit different event
+        _emitEvent(FullInitialSyncAlreadyCompletedEvent(
+            totalFeatures: featuresToSync.length));
+        return;
+      }
 
       for (final featureKey in featuresToSync) {
         if (_isCancelled) {
@@ -77,6 +112,13 @@ class InitialSyncManager implements InitialSyncService {
       }
 
       _setStatus(InitialSyncStatus.completed);
+
+      // Only emit FullInitialSyncCompletedEvent if this is the first time completing
+      if (!_hasEverCompleted) {
+        _hasEverCompleted = true;
+        _emitEvent(FullInitialSyncCompletedEvent(
+            totalFeatures: featuresToSync.length));
+      }
     } catch (e) {
       if (_status != InitialSyncStatus.cancelled) {
         _setStatus(InitialSyncStatus.failed);
@@ -109,7 +151,7 @@ class InitialSyncManager implements InitialSyncService {
   /// Handle incoming sync events from the stream.
   void _handleSyncEvent(SyncEvent event) async {
     if (event is InitialSyncRequiredEvent) {
-      if (!_handlers.containsKey(event.featureKey)) {
+      if (!_featureConfigs.containsKey(event.featureKey)) {
         return; // Handler not available, skip
       }
 
@@ -128,13 +170,14 @@ class InitialSyncManager implements InitialSyncService {
     _emitEvent(InitialSyncStartedEvent(featureKey: featureKey));
 
     try {
-      final handler = _handlers[featureKey];
-      if (handler == null) {
+      final config = _featureConfigs[featureKey];
+      if (config == null) {
         _featureStatuses[featureKey] = InitialSyncStatus.failed;
         throw HandlerNotFoundException(
-          'No sync handler registered for feature: $featureKey',
+          'No sync config registered for feature: $featureKey',
         );
       }
+      final handler = config.handler;
 
       // If initial sync was already completed for this feature, skip it.
       final alreadyInitial = await metaRepo.isInitialSyncCompleted(featureKey);
@@ -148,61 +191,27 @@ class InitialSyncManager implements InitialSyncService {
         throw OperationCancelledException('Sync cancelled before trying');
       }
 
-      // Step 1: Get last cursor for initial sync (separate from incremental)
-      String? cursor = await metaRepo.getLastInitialSyncCursor(featureKey);
-      // Step 2: Fetch all pages from remote (efficient paginated fetch)
-      while (true) {
-        if (_isCancelled) {
-          throw OperationCancelledException('Sync cancelled during pagination');
-        }
-        final batchResult = await _retryPolicy.attempt(
-          () async {
-            if (_isCancelled) {
-              throw OperationCancelledException(
-                  "Operation was cancelled before fetch");
-            }
-            return await handler.getRemote(
-                cursor: cursor, batchSize: batchSize);
-          },
-          isCancelled: () => _isCancelled,
-        );
-        if (batchResult == null) {
-          throw MaxRetriesExceededException(
-            'Failed to fetch page for feature: $featureKey',
-          );
-        }
-        if (_isCancelled) {
-          throw OperationCancelledException('Sync cancelled after fetch');
-        }
+      // Get last checkpoint for initial sync (separate from background sync)
+      final initialCheckpoint =
+          await metaRepo.getLastInitialSyncCheckpoint(featureKey);
 
-        // Step 3: Apply changes in bulk (efficient batch write)
-        if (batchResult.items.isNotEmpty) {
-          final applyResult = await handler.applyToLocal(batchResult.items);
-          if (!applyResult.success) {
-            throw SyncFailedException(
-              'Failed to apply batch to local for feature: $featureKey. '
-              'Errors: ${applyResult.errors.map((e) => e.message).join(', ')}',
-            );
-          }
-        }
-
-        // Step 4: Update cursor to continue from this batch
-        if (batchResult.nextCursor != null) {
-          await metaRepo.updateLastInitialSyncCursor(
-              featureKey, batchResult.nextCursor!);
-        }
-
-        // Step 5: Check if there are more pages
-        if (batchResult.nextCursor == null) {
-          break; // No more pages, sync complete
-        }
-        cursor = batchResult.nextCursor;
-      }
+      // Execute paginated sync using common executor
+      await _executor.executePaginatedSync(
+        fetchBatch: (checkpoint) => handler.fetchRemoteData(
+          checkpoint: checkpoint,
+          batchSize: batchSize,
+        ),
+        applyBatch: (items) => handler.saveToLocal(items),
+        featureKey: featureKey,
+        onBatchComplete: (checkpoint) {
+          metaRepo.updateLastInitialSyncCheckpoint(featureKey, checkpoint);
+        },
+        isCancelled: () => _isCancelled,
+        initialCheckpoint: initialCheckpoint,
+      );
 
       _featureStatuses[featureKey] = InitialSyncStatus.completed;
-      // Mark initial sync as completed and record last synced cursor.
       await metaRepo.setInitialSyncCompleted(featureKey, true);
-      await metaRepo.updateLastInitialSyncCursor(featureKey, cursor);
       _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
     } catch (e) {
       final st = StackTrace.current;

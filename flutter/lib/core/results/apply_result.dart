@@ -1,4 +1,4 @@
-import 'package:fero_sync/core/apply_error.dart';
+import 'package:fero_sync/core/results/apply_error.dart';
 
 /// --- ApplyResult ---
 /// Result of trying to apply a batch of items (to local or remote storage)

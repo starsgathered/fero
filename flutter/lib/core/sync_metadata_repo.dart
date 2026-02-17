@@ -1,58 +1,84 @@
+import 'package:fero_sync/core/models/sync_checkpoint.dart';
+
 /// Sync metadata repository
 ///
 /// Responsible for storing feature-specific sync metadata such as the
-/// last sync cursor. Implementations may use an on-disk store, database,
+/// last sync checkpoint. Implementations may use an on-disk store, database,
 /// or an in-memory map (useful for tests).
+///
+/// Follows Dependency Inversion Principle (DIP) - high-level sync logic
+/// depends on this abstraction, not concrete storage implementations.
 abstract class SyncMetaDataRepo {
-  /// Returns the last saved cursor specifically used by the initial sync
-  /// process for [featureKey], or `null` if none.
-  Future<String?> getLastInitialSyncCursor(String featureKey);
+  /// Returns the last checkpoint from the initial sync process for [featureKey].
+  Future<SyncCheckpoint?> getLastInitialSyncCheckpoint(String featureKey);
 
-  /// Updates the last saved cursor used by the initial sync process for
-  /// [featureKey]. This is kept separate from the incremental/background
-  /// sync cursor to avoid conflicts between initial one-time downloads and
-  /// ongoing incremental syncing.
-  Future<void> updateLastInitialSyncCursor(String featureKey, String? cursor);
+  /// Updates the last checkpoint used by the initial sync process for [featureKey].
+  /// This is kept separate from the background sync checkpoint to avoid conflicts.
+  Future<void> updateLastInitialSyncCheckpoint(
+    String featureKey,
+    SyncCheckpoint? checkpoint,
+  );
 
   /// Returns whether the initial (critical) sync has been completed for [featureKey].
   /// If `true`, initial sync may be skipped for that feature.
   Future<bool> isInitialSyncCompleted(String featureKey);
 
+  /// Checks if all specified features have completed initial sync.
+  /// More efficient than checking each feature individually.
+  /// Returns `true` only if all features in [featureKeys] are completed.
+  Future<bool> areAllInitialSyncsCompleted(List<String> featureKeys);
+
   /// Sets the initial sync completed flag for [featureKey].
   Future<void> setInitialSyncCompleted(String featureKey, bool completed);
 
-  /// Returns the last time a successful sync (initial or incremental) ran for [featureKey].
-  /// Returns the last saved cursor representing the state of the last
-  /// successful sync (initial or incremental) for [featureKey], or `null`.
-  Future<String?> getLastBackgroundSyncedCursor(String featureKey);
+  /// Returns the last checkpoint from a successful background sync for [featureKey].
+  /// Used for resumable, incremental syncing.
+  Future<SyncCheckpoint?> getLastBackgroundSyncCheckpoint(String featureKey);
 
-  /// Updates the last saved cursor representing the state of the last
-  /// successful sync (initial or incremental) for [featureKey].
-  /// `cursor` may be `null` if there is no cursor to record.
-  Future<void> updateLastBackgroundSyncedCursor(
-      String featureKey, String? cursor);
+  /// Updates the last checkpoint from a successful background sync for [featureKey].
+  /// Stores (lastUpdatedAt, lastItemId) for deterministic pagination.
+  Future<void> updateLastBackgroundSyncCheckpoint(
+    String featureKey,
+    SyncCheckpoint? checkpoint,
+  );
 }
 
 /// Simple in-memory implementation useful for tests and examples.
+/// Demonstrates the Repository pattern with clean separation of concerns.
 class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
-  final Map<String, String?> _initialStore = {};
+  final Map<String, SyncCheckpoint?> _initialCheckpoints = {};
   final Map<String, bool> _initialCompleted = {};
-  final Map<String, String?> _backgroundSyncedCursor = {};
+  final Map<String, SyncCheckpoint?> _backgroundCheckpoints = {};
 
   @override
-  Future<String?> getLastInitialSyncCursor(String featureKey) async {
-    return _initialStore[featureKey];
+  Future<SyncCheckpoint?> getLastInitialSyncCheckpoint(
+      String featureKey) async {
+    return _initialCheckpoints[featureKey];
   }
 
   @override
-  Future<void> updateLastInitialSyncCursor(
-      String featureKey, String? cursor) async {
-    _initialStore[featureKey] = cursor;
+  Future<void> updateLastInitialSyncCheckpoint(
+    String featureKey,
+    SyncCheckpoint? checkpoint,
+  ) async {
+    _initialCheckpoints[featureKey] = checkpoint;
   }
 
   @override
   Future<bool> isInitialSyncCompleted(String featureKey) async {
     return _initialCompleted[featureKey] ?? false;
+  }
+
+  @override
+  Future<bool> areAllInitialSyncsCompleted(List<String> featureKeys) async {
+    if (featureKeys.isEmpty) return true;
+
+    for (final key in featureKeys) {
+      if (!(_initialCompleted[key] ?? false)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @override
@@ -62,13 +88,16 @@ class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
   }
 
   @override
-  Future<String?> getLastBackgroundSyncedCursor(String featureKey) async {
-    return _backgroundSyncedCursor[featureKey];
+  Future<SyncCheckpoint?> getLastBackgroundSyncCheckpoint(
+      String featureKey) async {
+    return _backgroundCheckpoints[featureKey];
   }
 
   @override
-  Future<void> updateLastBackgroundSyncedCursor(
-      String featureKey, String? cursor) async {
-    _backgroundSyncedCursor[featureKey] = cursor;
+  Future<void> updateLastBackgroundSyncCheckpoint(
+    String featureKey,
+    SyncCheckpoint? checkpoint,
+  ) async {
+    _backgroundCheckpoints[featureKey] = checkpoint;
   }
 }

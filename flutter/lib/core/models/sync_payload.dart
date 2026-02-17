@@ -1,4 +1,4 @@
-import 'package:fero_sync/core/syncable.dart';
+import 'package:fero_sync/core/models/syncable.dart';
 
 /// --- SyncPayload ---
 /// Generic container for a feature's data and its version.

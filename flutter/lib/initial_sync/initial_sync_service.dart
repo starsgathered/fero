@@ -1,4 +1,4 @@
-import 'package:fero_sync/core/sync_event.dart';
+import 'package:fero_sync/core/events/sync_event.dart';
 import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 
 /// Public interface for the initial sync service.
