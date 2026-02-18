@@ -58,14 +58,6 @@ class SyncExecutor {
         );
       }
 
-      // Check if fetch operation failed
-      if (!batchResult.success) {
-        throw SyncFailedException(
-          'Failed to fetch batch for feature: $featureKey. '
-          'Error: ${batchResult.errorMessage ?? "Unknown error"}',
-        );
-      }
-
       if (isCancelled?.call() ?? false) {
         throw OperationCancelledException('Sync cancelled after fetch');
       }
