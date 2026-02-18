@@ -76,46 +76,38 @@ class FeroSync {
     Map<String, FeatureSyncConfig>? backgroundSyncConfigs,
     required SyncMetaDataRepo metadataRepo,
     RetryPolicy? retryPolicy,
-    ConflictResolutionStrategy? conflictStrategy,
     int? batchSize,
     int? maxBatchSize,
     int? maxConcurrent,
-    InitialSyncManager? initialManager,
-    BackgroundSyncManager? backgroundManager,
   }) async {
     final retryPolicyValue = retryPolicy ??
         RetryPolicy(
             backoff:
                 ExponentialBackoffStrategy(baseMillis: 100, maxMillis: 30000));
 
-    final strategy =
-        conflictStrategy ?? ConflictResolutionStrategy.highestVersionWins;
+    final strategy = ConflictResolutionStrategy.highestVersionWins;
 
     final int bs = batchSize ?? 50;
     final int mbs = maxBatchSize ?? 500;
 
     // If caller provided an InitialSyncManager, use it; otherwise create a default one
-    final InitialSyncManager initManager = initialManager ??
-        InitialSyncManager(
-          featureConfigs: initialSyncConfigs,
-          retryPolicy: retryPolicyValue,
-          maxRetries: 5,
-          batchSize: bs,
-          maxBatchSize: mbs,
-          metaRepo: metadataRepo,
-        );
+    final InitialSyncManager initManager = InitialSyncManager(
+      featureConfigs: initialSyncConfigs,
+      retryPolicy: retryPolicyValue,
+      batchSize: bs,
+      maxBatchSize: mbs,
+      metaRepo: metadataRepo,
+    );
 
     // Create BackgroundSyncManager if configs are provided
     BackgroundSyncManager? bgManager;
     if (backgroundSyncConfigs != null) {
-      bgManager = backgroundManager ??
-          BackgroundSyncManager(
-            featureConfigs: backgroundSyncConfigs,
-            metaRepo: metadataRepo,
-            maxConcurrent: maxConcurrent ?? 2,
-            batchSize: bs,
-            conflictStrategy: strategy,
-          );
+      bgManager = BackgroundSyncManager(
+        featureConfigs: backgroundSyncConfigs,
+        metaRepo: metadataRepo,
+        maxConcurrent: maxConcurrent ?? 2,
+        batchSize: bs,
+      );
     }
 
     final instance = FeroSync._(

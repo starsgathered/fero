@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/results/apply_result.dart';
 import 'package:fero_sync/background_sync/background_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
@@ -32,7 +31,6 @@ Future<void> main() async {
         priority: 100,
       ),
     },
-    conflictStrategy: ConflictResolutionStrategy.highestVersionWins,
     // Background sync: Runs periodically to keep data fresh
     // Handles incremental updates after initial sync is complete
     backgroundSyncConfigs: {

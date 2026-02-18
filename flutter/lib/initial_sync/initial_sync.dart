@@ -152,10 +152,6 @@ class InitialSyncManager implements InitialSyncService {
   /// Handle incoming sync events from the stream.
   void _handleSyncEvent(SyncEvent event) async {
     if (event is InitialSyncRequiredEvent) {
-      if (!_featureConfigs.containsKey(event.featureKey)) {
-        return; // Handler not available, skip
-      }
-
       try {
         await _performSync(event.featureKey);
       } catch (e) {
