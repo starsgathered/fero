@@ -186,9 +186,9 @@ class InitialSyncManager implements InitialSyncService {
       _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
     } catch (e) {
       if (!_isCancelled) {
-        if (e is Exception) {
-          _emitEvent(InitialSyncFailedEvent(featureKey: featureKey, error: e));
-        }
+        final exception = e is Exception ? e : Exception(e.toString());
+        _emitEvent(
+            InitialSyncFailedEvent(featureKey: featureKey, error: exception));
       }
       rethrow;
     }
