@@ -94,6 +94,7 @@ class InitialSyncManager implements InitialSyncService {
         // Emit individual feature events for consistency
         for (final featureKey in featuresToSync) {
           _featureStatuses[featureKey] = InitialSyncStatus.completed;
+          featuresToSync.remove(featureKey);
           _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
         }
         // Already completed before, emit different event
@@ -240,6 +241,9 @@ class InitialSyncManager implements InitialSyncService {
     _statusController.close();
     _eventController.close();
     _isRunning = false;
+    _isCancelled = false;
+    _hasEverCompleted = false;
+    _featureStatuses.clear();
   }
 
   void _setStatus(InitialSyncStatus s) {

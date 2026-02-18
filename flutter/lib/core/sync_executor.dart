@@ -43,13 +43,13 @@ class SyncExecutor {
       // Fetch batch with retry
       final batchResult = await retryPolicy.attempt(
         () async {
-          if (isCancelled?.call() ?? false) {
-            throw OperationCancelledException(
-                'Operation cancelled before fetch');
+          final result = await fetchBatch(checkpoint);
+          if (!result.success) {
+            throw SyncFailedException(
+                'Failed fetch batch: ${result.errorMessage ?? "unknown"}');
           }
-          return await fetchBatch(checkpoint);
+          return result;
         },
-        isCancelled: isCancelled,
       );
 
       if (batchResult == null) {
