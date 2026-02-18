@@ -239,6 +239,7 @@ class InitialSyncManager implements InitialSyncService {
   void dispose() {
     _statusController.close();
     _eventController.close();
+    _isRunning = false;
   }
 
   void _setStatus(InitialSyncStatus s) {
