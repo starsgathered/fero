@@ -27,7 +27,7 @@ class FeroSync {
   final InitialSyncManager _initialManager;
 
   /// Manager for performing background/incremental sync
-  final BackgroundSyncManager? backgroundManager;
+  final BackgroundSyncManager? _backgroundManager;
 
   /// Repository for storing sync metadata (e.g. last cursors)
   final SyncMetaDataRepo metadataRepo;
@@ -64,8 +64,9 @@ class FeroSync {
     required this.maxBatchSize,
     required this.metadataRepo,
     required InitialSyncManager initialManager,
-    required this.backgroundManager,
-  }) : _initialManager = initialManager;
+    BackgroundSyncManager? backgroundManager,
+  })  : _initialManager = initialManager,
+        _backgroundManager = backgroundManager;
 
   /// Factory method to create an instance of FeroSync asynchronously
   /// Sets default backoff and conflict resolution strategies if none are provided
@@ -147,7 +148,7 @@ class FeroSync {
       if (event is FullInitialSyncCompletedEvent ||
           event is FullInitialSyncAlreadyCompletedEvent) {
         // Start background sync for the feature that just completed initial sync
-        backgroundManager?.syncAll();
+        _backgroundManager?.syncAll();
       }
     });
   }
@@ -173,11 +174,11 @@ class FeroSync {
 
   /// Stream to observe background sync events
   Stream<SyncEvent>? get backgroundSyncEventStream =>
-      backgroundManager?.eventStream;
+      _backgroundManager?.eventStream;
 
   /// Manually trigger background sync for all features
   void syncAll() {
-    backgroundManager?.syncAll();
+    _backgroundManager?.syncAll();
   }
 
   /// Cancel ongoing operations safely
@@ -189,6 +190,6 @@ class FeroSync {
   void dispose() {
     _eventSubscription?.cancel();
     _initialManager.dispose();
-    backgroundManager?.dispose();
+    _backgroundManager?.dispose();
   }
 }

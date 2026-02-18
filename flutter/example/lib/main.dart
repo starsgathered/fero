@@ -54,10 +54,6 @@ Future<void> main() async {
     print('📡 ${event.runtimeType}');
   });
 
-  // Start syncing all features
-  print('▶️  Syncing contacts and messages...\n');
-  feroSync.backgroundManager?.syncAll();
-
   await Future.delayed(Duration(seconds: 1));
   print('\n✅ Sync complete!\n');
 }
