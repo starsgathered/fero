@@ -151,11 +151,6 @@ class FeroSync {
     await _initialManager.run();
   }
 
-  /// Get current status of a specific feature
-  dynamic getFeatureStatus(String featureKey) {
-    return _initialManager.getFeatureStatus(featureKey);
-  }
-
   /// Emit a sync event manually
   void emitSyncEvent(SyncEvent event) {
     _initialManager.emitEvent(event);

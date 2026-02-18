@@ -52,3 +52,18 @@ class InitialSyncFailedEvent extends SyncEvent {
     super.timestamp,
   });
 }
+
+/// Event emitted when initial sync status changes to running.
+class InitialSyncRunningEvent extends SyncEvent {
+  InitialSyncRunningEvent({super.timestamp}) : super(featureKey: '__all__');
+}
+
+/// Event emitted when initial sync status changes to cancelled.
+class InitialSyncCancelledEvent extends SyncEvent {
+  InitialSyncCancelledEvent({super.timestamp}) : super(featureKey: '__all__');
+}
+
+/// Event emitted when initial sync status changes to not started.
+class InitialSyncNotStartedEvent extends SyncEvent {
+  InitialSyncNotStartedEvent({super.timestamp}) : super(featureKey: '__all__');
+}

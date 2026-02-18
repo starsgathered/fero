@@ -7,7 +7,6 @@ import 'package:fero_sync/core/sync_executor.dart';
 import 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
-import 'package:fero_sync/initial_sync/initial_sync_status.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 
 /// Configuration for a feature's initial sync behavior.
@@ -31,17 +30,12 @@ class InitialSyncManager implements InitialSyncService {
   final int maxBatchSize;
   final SyncMetaDataRepo metaRepo;
 
-  final StreamController<InitialSyncStatus> _statusController =
-      StreamController.broadcast();
   final StreamController<SyncEvent> _eventController =
       StreamController.broadcast();
-
-  InitialSyncStatus _status = InitialSyncStatus.notStarted;
 
   bool _isRunning = false;
   bool _isCancelled = false;
   bool _hasEverCompleted = false; // Track if full sync ever completed
-  final Map<String, InitialSyncStatus> _featureStatuses = {};
 
   InitialSyncManager({
     required Map<String, FeatureInitialSyncConfig> featureConfigs,
@@ -58,13 +52,10 @@ class InitialSyncManager implements InitialSyncService {
                     baseMillis: 100, maxMillis: 30000),
                 maxRetries: maxRetries,
               ),
-        );
-
-  @override
-  InitialSyncStatus get status => _status;
-
-  @override
-  Stream<InitialSyncStatus> get statusStream => _statusController.stream;
+        ) {
+    // Emit initial state event
+    _emitEvent(InitialSyncNotStartedEvent());
+  }
 
   @override
   Stream<SyncEvent> get eventStream => _eventController.stream;
@@ -78,7 +69,7 @@ class InitialSyncManager implements InitialSyncService {
 
     _isRunning = true;
     _isCancelled = false;
-    _setStatus(InitialSyncStatus.running);
+    _emitEvent(InitialSyncRunningEvent());
 
     try {
       final featuresToSync = _featureConfigs.keys.toList();
@@ -89,11 +80,8 @@ class InitialSyncManager implements InitialSyncService {
 
       // If all features already synced, emit events for consistency and skip sync
       if (allCompleted) {
-        _setStatus(InitialSyncStatus.completed);
-
         // Emit individual feature events for consistency
         for (final featureKey in featuresToSync) {
-          _featureStatuses[featureKey] = InitialSyncStatus.completed;
           featuresToSync.remove(featureKey);
           _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
         }
@@ -105,14 +93,12 @@ class InitialSyncManager implements InitialSyncService {
 
       for (final featureKey in featuresToSync) {
         if (_isCancelled) {
-          _setStatus(InitialSyncStatus.cancelled);
+          _emitEvent(InitialSyncCancelledEvent());
           throw OperationCancelledException('Initial sync cancelled');
         }
 
         await _performSync(featureKey);
       }
-
-      _setStatus(InitialSyncStatus.completed);
 
       // Only emit FullInitialSyncCompletedEvent if this is the first time completing
       if (!_hasEverCompleted) {
@@ -121,19 +107,13 @@ class InitialSyncManager implements InitialSyncService {
             totalFeatures: featuresToSync.length));
       }
     } catch (e) {
-      if (_status != InitialSyncStatus.cancelled) {
-        _setStatus(InitialSyncStatus.failed);
+      if (!_isCancelled) {
+        // Failed event handled by _performSync for specific features
       }
       rethrow;
     } finally {
       _isRunning = false;
     }
-  }
-
-  /// Get the sync status for a specific feature.
-  @override
-  InitialSyncStatus? getFeatureStatus(String featureKey) {
-    return _featureStatuses[featureKey];
   }
 
   @override
@@ -142,9 +122,7 @@ class InitialSyncManager implements InitialSyncService {
     _eventController.stream.listen(
       _handleSyncEvent,
       onError: (error) {
-        if (!_statusController.isClosed) {
-          _statusController.addError(error);
-        }
+        // Errors are handled via events
       },
     );
   }
@@ -163,13 +141,11 @@ class InitialSyncManager implements InitialSyncService {
   /// Perform initial sync for a feature using batch operations.
   /// Fetches and applies multiple items in bulk for performance.
   Future<void> _performSync(String featureKey) async {
-    _featureStatuses[featureKey] = InitialSyncStatus.running;
     _emitEvent(InitialSyncStartedEvent(featureKey: featureKey));
 
     try {
       final config = _featureConfigs[featureKey];
       if (config == null) {
-        _featureStatuses[featureKey] = InitialSyncStatus.failed;
         throw HandlerNotFoundException(
           'No sync config registered for feature: $featureKey',
         );
@@ -179,7 +155,6 @@ class InitialSyncManager implements InitialSyncService {
       // If initial sync was already completed for this feature, skip it.
       final alreadyInitial = await metaRepo.isInitialSyncCompleted(featureKey);
       if (alreadyInitial) {
-        _featureStatuses[featureKey] = InitialSyncStatus.completed;
         _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
         return;
       }
@@ -207,14 +182,13 @@ class InitialSyncManager implements InitialSyncService {
         initialCheckpoint: initialCheckpoint,
       );
 
-      _featureStatuses[featureKey] = InitialSyncStatus.completed;
       await metaRepo.setInitialSyncCompleted(featureKey, true);
       _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
     } catch (e) {
-      final st = StackTrace.current;
-      if (_status != InitialSyncStatus.cancelled) {
-        _featureStatuses[featureKey] = InitialSyncStatus.failed;
-        if (!_statusController.isClosed) _statusController.addError(e, st);
+      if (!_isCancelled) {
+        if (e is Exception) {
+          _emitEvent(InitialSyncFailedEvent(featureKey: featureKey, error: e));
+        }
       }
       rethrow;
     }
@@ -234,17 +208,10 @@ class InitialSyncManager implements InitialSyncService {
 
   @override
   void dispose() {
-    _statusController.close();
     _eventController.close();
     _isRunning = false;
     _isCancelled = false;
     _hasEverCompleted = false;
-    _featureStatuses.clear();
-  }
-
-  void _setStatus(InitialSyncStatus s) {
-    _status = s;
-    if (!_statusController.isClosed) _statusController.add(s);
   }
 
   void _emitEvent(SyncEvent event) {
