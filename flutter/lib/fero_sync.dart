@@ -24,7 +24,7 @@ export 'package:fero_sync/core/events/sync_event.dart';
 /// - Event broadcasting for UI or logging
 class FeroSync {
   /// Manager for performing the initial sync of all features
-  final InitialSyncManager initialManager;
+  final InitialSyncManager _initialManager;
 
   /// Manager for performing background/incremental sync
   final BackgroundSyncManager? backgroundManager;
@@ -63,9 +63,9 @@ class FeroSync {
     required this.batchSize,
     required this.maxBatchSize,
     required this.metadataRepo,
-    required this.initialManager,
+    required InitialSyncManager initialManager,
     required this.backgroundManager,
-  });
+  }) : _initialManager = initialManager;
 
   /// Factory method to create an instance of FeroSync asynchronously
   /// Sets default backoff and conflict resolution strategies if none are provided
@@ -143,7 +143,7 @@ class FeroSync {
     if (_autoBackgroundSyncSetup) return;
 
     _autoBackgroundSyncSetup = true;
-    _eventSubscription = initialManager.eventStream.listen((event) {
+    _eventSubscription = _initialManager.eventStream.listen((event) {
       if (event is FullInitialSyncCompletedEvent ||
           event is FullInitialSyncAlreadyCompletedEvent) {
         // Start background sync for the feature that just completed initial sync
@@ -154,22 +154,22 @@ class FeroSync {
 
   /// Start listening to sync events
   Future<void> startSync() async {
-    await initialManager.startListeningToEvents();
-    await initialManager.run();
+    await _initialManager.startListeningToEvents();
+    await _initialManager.run();
   }
 
   /// Get current status of a specific feature
   dynamic getFeatureStatus(String featureKey) {
-    return initialManager.getFeatureStatus(featureKey);
+    return _initialManager.getFeatureStatus(featureKey);
   }
 
   /// Emit a sync event manually
   void emitSyncEvent(SyncEvent event) {
-    initialManager.emitEvent(event);
+    _initialManager.emitEvent(event);
   }
 
   /// Stream to observe raw sync events for logging or UI updates
-  Stream<SyncEvent> get initialSyncEventStream => initialManager.eventStream;
+  Stream<SyncEvent> get initialSyncEventStream => _initialManager.eventStream;
 
   /// Stream to observe background sync events
   Stream<SyncEvent>? get backgroundSyncEventStream =>
@@ -182,13 +182,13 @@ class FeroSync {
 
   /// Cancel ongoing operations safely
   void cancel() {
-    initialManager.cancel();
+    _initialManager.cancel();
   }
 
   /// Dispose resources when the FeroSync instance is no longer needed
   void dispose() {
     _eventSubscription?.cancel();
-    initialManager.dispose();
+    _initialManager.dispose();
     backgroundManager?.dispose();
   }
 }

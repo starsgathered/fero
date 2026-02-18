@@ -228,7 +228,7 @@ class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
     final lastItem =
         serverPreferences.isNotEmpty ? serverPreferences.last : null;
 
-    return SyncBatchResult(
+    return SyncBatchResult.success(
       items: serverPreferences
           .map((p) => SyncPayload<ServerItem>(data: p))
           .toList(),
@@ -296,7 +296,7 @@ class ContactSyncHandler extends BackgroundSyncHandler {
     // last item picked for checkpointing to ensure correct pagination
     final lastItem = serverContacts.isNotEmpty ? serverContacts.last : null;
 
-    return SyncBatchResult(
+    return SyncBatchResult.success(
       items:
           serverContacts.map((c) => SyncPayload<ServerItem>(data: c)).toList(),
       checkpoint: lastItem != null
@@ -355,7 +355,7 @@ class MessageSyncHandler extends BackgroundSyncHandler {
     ];
     final lastMsg = serverMessages.isNotEmpty ? serverMessages.last : null;
 
-    return SyncBatchResult(
+    return SyncBatchResult.success(
       items:
           serverMessages.map((m) => SyncPayload<ServerItem>(data: m)).toList(),
       checkpoint: lastMsg != null
