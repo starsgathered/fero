@@ -8,7 +8,7 @@ import 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/widgets.dart';
 
 /// Configuration for a feature's initial sync behavior.
 class FeatureInitialSyncConfig {
@@ -36,7 +36,7 @@ class InitialSyncManager implements InitialSyncService {
 
   bool _isRunning = false;
   bool _isCancelled = false;
-  bool _hasEverCompleted = false; // Track if full sync ever completed
+  bool? _hasEverCompleted; // Track if full sync ever completed
 
   InitialSyncManager({
     required Map<String, FeatureInitialSyncConfig> featureConfigs,
@@ -54,7 +54,8 @@ class InitialSyncManager implements InitialSyncService {
                 maxRetries: maxRetries,
               ),
         ) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Emit initialized/not started **after widgets binding ready**
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _emitEvent(InitialSyncNotStartedEvent());
     });
   }
@@ -68,30 +69,25 @@ class InitialSyncManager implements InitialSyncService {
     if (_isRunning) {
       throw SyncAlreadyRunningException('Initial sync already running');
     }
-
+    final featuresToSync = _featureConfigs.keys.toList();
+    final allCompleted = _hasEverCompleted ??=
+        await metaRepo.areAllInitialSyncsCompleted(featuresToSync);
+    if (allCompleted) {
+      _hasEverCompleted = true;
+      // Emit individual feature events for consistency without modifying the list
+      final totalFeatures = featuresToSync.length;
+      for (final featureKey in featuresToSync) {
+        _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
+      }
+      // Already completed before, emit different event
+      _emitEvent(
+          FullInitialSyncAlreadyCompletedEvent(totalFeatures: totalFeatures));
+      return;
+    }
     _isRunning = true;
     _isCancelled = false;
 
     try {
-      final featuresToSync = _featureConfigs.keys.toList();
-
-      // Check if all features are already completed (optimized batch check)
-      final allCompleted =
-          await metaRepo.areAllInitialSyncsCompleted(featuresToSync);
-
-      // If all features already synced, emit events for consistency and skip sync
-      if (allCompleted) {
-        // Emit individual feature events for consistency without modifying the list
-        final totalFeatures = featuresToSync.length;
-        for (final featureKey in featuresToSync) {
-          _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
-        }
-        // Already completed before, emit different event
-        _emitEvent(
-            FullInitialSyncAlreadyCompletedEvent(totalFeatures: totalFeatures));
-        _isRunning = false;
-        return;
-      }
       _emitEvent(InitialSyncRunningEvent());
 
       for (final featureKey in featuresToSync) {
@@ -104,11 +100,9 @@ class InitialSyncManager implements InitialSyncService {
       }
 
       // Only emit FullInitialSyncCompletedEvent if this is the first time completing
-      if (!_hasEverCompleted) {
-        _hasEverCompleted = true;
-        _emitEvent(FullInitialSyncCompletedEvent(
-            totalFeatures: featuresToSync.length));
-      }
+      _hasEverCompleted = true;
+      _emitEvent(
+          FullInitialSyncCompletedEvent(totalFeatures: featuresToSync.length));
     } catch (e) {
       if (!_isCancelled) {
         // Failed event handled by _performSync for specific features
@@ -132,7 +126,11 @@ class InitialSyncManager implements InitialSyncService {
         );
       }
       final handler = config.handler;
-
+      if (_hasEverCompleted == true) {
+        // If full sync already completed before, skip to avoid redundant work
+        _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
+        return;
+      }
       // If initial sync was already completed for this feature, skip it.
       final alreadyInitial = await metaRepo.isInitialSyncCompleted(featureKey);
       if (alreadyInitial) {
@@ -172,6 +170,8 @@ class InitialSyncManager implements InitialSyncService {
             InitialSyncFailedEvent(featureKey: featureKey, error: exception));
       }
       rethrow;
+    } finally {
+      _isRunning = false;
     }
   }
 
