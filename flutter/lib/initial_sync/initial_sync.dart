@@ -192,7 +192,7 @@ class InitialSyncManager implements InitialSyncService {
     _eventController.close();
     _isRunning = false;
     _isCancelled = false;
-    _hasEverCompleted = false;
+    _hasEverCompleted = null;
   }
 
   void _emitEvent(SyncEvent event) {
