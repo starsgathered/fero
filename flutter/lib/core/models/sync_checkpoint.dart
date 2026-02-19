@@ -5,42 +5,36 @@
 /// This approach ensures:
 /// 1. Consistent ordering using monotonically increasing IDs
 /// 2. Ability to resume from exact point after interruption
-/// 3. Simple and efficient pagination (WHERE syncId > lastSyncId)
+/// 3. Simple and efficient pagination (WHERE syncId > afterId)
 ///
 /// Immutable value object following clean architecture principles.
 class SyncCheckpoint {
-  /// The syncId of the last synced item (monotonic identifier)
-  final int lastSyncId;
-
-  /// Last updated timestamp from the checkpoint
-  final DateTime updatedAt;
+  /// Fetch items AFTER this ID. Query: WHERE syncId > afterId
+  /// Example: afterId=100 → fetch items 101, 102, 103...
+  final int afterId;
 
   const SyncCheckpoint({
-    required this.lastSyncId,
-    required this.updatedAt,
+    required this.afterId,
   });
 
   /// Create checkpoint from a syncable item
-  factory SyncCheckpoint.fromSyncable(int syncId, DateTime updatedAt) {
+  factory SyncCheckpoint.fromSyncable(int syncId) {
     return SyncCheckpoint(
-      lastSyncId: syncId,
-      updatedAt: updatedAt,
+      afterId: syncId,
     );
   }
 
   /// Serialize to map for storage
   Map<String, dynamic> toJson() {
     return {
-      'lastSyncId': lastSyncId,
-      'updatedAt': updatedAt.toIso8601String(),
+      'afterId': afterId,
     };
   }
 
   /// Deserialize from stored map
   factory SyncCheckpoint.fromJson(Map<String, dynamic> json) {
     return SyncCheckpoint(
-      lastSyncId: json['lastSyncId'] as int,
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      afterId: json['afterId'] as int,
     );
   }
 
@@ -49,13 +43,11 @@ class SyncCheckpoint {
       identical(this, other) ||
       other is SyncCheckpoint &&
           runtimeType == other.runtimeType &&
-          lastSyncId == other.lastSyncId &&
-          updatedAt == other.updatedAt;
+          afterId == other.afterId;
 
   @override
-  int get hashCode => Object.hash(lastSyncId, updatedAt);
+  int get hashCode => afterId.hashCode;
 
   @override
-  String toString() =>
-      'SyncCheckpoint(lastSyncId: $lastSyncId, updatedAt: $updatedAt)';
+  String toString() => 'SyncCheckpoint(afterId: $afterId)';
 }

@@ -17,8 +17,13 @@ class SyncExecutor {
 
   /// Execute paginated sync with checkpoint-based pagination (for background sync).
   ///
+  /// Uses checkpoint (cursor/nextId) returned by the server to determine
+  /// continuation. If the server returns no checkpoint (null) the pagination
+  /// is considered complete. Empty `items` with no checkpoint also terminates.
+  ///
   /// [fetchBatch] - Function to fetch a batch of items given a checkpoint
   /// [applyBatch] - Function to apply a batch of items locally
+  /// [featureKey] - Feature identifier for error reporting
   /// [onBatchComplete] - Optional callback after each batch is processed
   /// [isCancelled] - Function to check if operation should be cancelled
   /// [initialCheckpoint] - Starting checkpoint for pagination
@@ -61,10 +66,12 @@ class SyncExecutor {
       if (isCancelled?.call() ?? false) {
         throw OperationCancelledException('Sync cancelled after fetch');
       }
+
       if (batchResult.items.isEmpty) {
-        // No items in this batch, end pagination
+        // No more items to process, end pagination
         break;
       }
+
       // Apply batch if not empty
       final applyResult = await applyBatch(batchResult.items);
       if (!applyResult.success) {
@@ -74,7 +81,7 @@ class SyncExecutor {
         );
       }
 
-      // Update checkpoint
+      // Update checkpoint after successful apply
       if (batchResult.checkpoint != null) {
         checkpoint = batchResult.checkpoint;
         onBatchComplete?.call(checkpoint);

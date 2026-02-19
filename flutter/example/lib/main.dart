@@ -228,7 +228,8 @@ class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
           .toList(),
       checkpoint: lastItem != null
           ? SyncCheckpoint(
-              lastSyncId: lastItem.syncId, updatedAt: lastItem.updatedAt)
+              afterId: lastItem.syncId,
+            )
           : null,
     );
   }
@@ -295,7 +296,8 @@ class ContactSyncHandler extends BackgroundSyncHandler {
           serverContacts.map((c) => SyncPayload<ServerItem>(data: c)).toList(),
       checkpoint: lastItem != null
           ? SyncCheckpoint(
-              lastSyncId: lastItem.syncId, updatedAt: lastItem.updatedAt)
+              afterId: lastItem.syncId,
+            )
           : null,
     );
   }
@@ -354,7 +356,8 @@ class MessageSyncHandler extends BackgroundSyncHandler {
           serverMessages.map((m) => SyncPayload<ServerItem>(data: m)).toList(),
       checkpoint: lastMsg != null
           ? SyncCheckpoint(
-              lastSyncId: lastMsg.syncId, updatedAt: lastMsg.updatedAt)
+              afterId: lastMsg.syncId,
+            )
           : null,
     );
   }
