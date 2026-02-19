@@ -80,14 +80,14 @@ class InitialSyncManager implements InitialSyncService {
 
       // If all features already synced, emit events for consistency and skip sync
       if (allCompleted) {
-        // Emit individual feature events for consistency
+        // Emit individual feature events for consistency without modifying the list
+        final totalFeatures = featuresToSync.length;
         for (final featureKey in featuresToSync) {
-          featuresToSync.remove(featureKey);
           _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
         }
         // Already completed before, emit different event
-        _emitEvent(FullInitialSyncAlreadyCompletedEvent(
-            totalFeatures: featuresToSync.length));
+        _emitEvent(
+            FullInitialSyncAlreadyCompletedEvent(totalFeatures: totalFeatures));
         return;
       }
 
