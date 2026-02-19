@@ -8,6 +8,7 @@ import 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
+import 'package:flutter/cupertino.dart';
 
 /// Configuration for a feature's initial sync behavior.
 class FeatureInitialSyncConfig {
@@ -53,8 +54,9 @@ class InitialSyncManager implements InitialSyncService {
                 maxRetries: maxRetries,
               ),
         ) {
-    // Emit initial state event
-    _emitEvent(InitialSyncNotStartedEvent());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _emitEvent(InitialSyncNotStartedEvent());
+    });
   }
 
   @override
@@ -69,7 +71,6 @@ class InitialSyncManager implements InitialSyncService {
 
     _isRunning = true;
     _isCancelled = false;
-    _emitEvent(InitialSyncRunningEvent());
 
     try {
       final featuresToSync = _featureConfigs.keys.toList();
@@ -88,8 +89,10 @@ class InitialSyncManager implements InitialSyncService {
         // Already completed before, emit different event
         _emitEvent(
             FullInitialSyncAlreadyCompletedEvent(totalFeatures: totalFeatures));
+        _isRunning = false;
         return;
       }
+      _emitEvent(InitialSyncRunningEvent());
 
       for (final featureKey in featuresToSync) {
         if (_isCancelled) {
