@@ -87,7 +87,7 @@ class ServerUserPreferences implements ServerItem {
   @override
   final String id;
   @override
-  final int syncId;
+  final BigInt syncId;
   @override
   final int version;
   @override
@@ -134,7 +134,7 @@ class ServerContact implements ServerItem {
   @override
   final String id;
   @override
-  final int syncId;
+  final BigInt syncId;
   @override
   final int version;
   @override
@@ -179,7 +179,7 @@ class ServerMessage implements ServerItem {
   @override
   final String id;
   @override
-  final int syncId;
+  final BigInt syncId;
   @override
   final int version;
   @override
@@ -209,11 +209,11 @@ class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
     // This is essential data needed before the app can function
     final serverPreferences = [
       ServerUserPreferences(
-        id: 'pref-1',
+        id: 's1',
         userId: 'user-123',
         displayName: 'John Doe',
         theme: 'dark',
-        syncId: 1,
+        syncId: BigInt.from(1),
         version: 1,
         updatedAt: DateTime.now().subtract(Duration(days: 2)),
       ),
@@ -274,7 +274,7 @@ class ContactSyncHandler extends BackgroundSyncHandler {
         id: 'c1',
         name: 'Alice',
         email: 'alice@example.com',
-        syncId: 100,
+        syncId: BigInt.from(100),
         version: 1,
         updatedAt: DateTime.now().subtract(Duration(minutes: 5)),
       ),
@@ -282,7 +282,7 @@ class ContactSyncHandler extends BackgroundSyncHandler {
         id: 'c2',
         name: 'Bob',
         email: 'bob@example.com',
-        syncId: 101,
+        syncId: BigInt.from(101),
         version: 1,
         updatedAt: DateTime.now(),
       ),
@@ -344,7 +344,7 @@ class MessageSyncHandler extends BackgroundSyncHandler {
         id: 'm2',
         contactId: 'c2',
         text: 'Welcome to FeroSync!',
-        syncId: 201,
+        syncId: BigInt.from(201),
         version: 1,
         updatedAt: DateTime.now(),
       ),

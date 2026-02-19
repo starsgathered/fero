@@ -143,7 +143,7 @@ class InitialSyncManager implements InitialSyncService {
 
       // Get last checkpoint for initial sync (separate from background sync)
       final initialCheckpoint =
-          await metaRepo.getLastInitialSyncCheckpoint(featureKey);
+          await metaRepo.getInitialSyncCheckpoint(featureKey);
 
       // Execute paginated sync using common executor
       await _executor.executePaginatedSync(
@@ -154,7 +154,7 @@ class InitialSyncManager implements InitialSyncService {
         applyBatch: (items) => handler.saveToLocal(items),
         featureKey: featureKey,
         onBatchComplete: (checkpoint) {
-          metaRepo.updateLastInitialSyncCheckpoint(featureKey, checkpoint);
+          metaRepo.updateInitialSyncCheckpoint(featureKey, checkpoint);
         },
         isCancelled: () => _isCancelled,
         initialCheckpoint: initialCheckpoint,

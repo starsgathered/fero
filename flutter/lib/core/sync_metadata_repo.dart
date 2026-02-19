@@ -10,11 +10,11 @@ import 'package:fero_sync/core/models/sync_checkpoint.dart';
 /// depends on this abstraction, not concrete storage implementations.
 abstract class SyncMetaDataRepo {
   /// Returns the last checkpoint from the initial sync process for [featureKey].
-  Future<SyncCheckpoint?> getLastInitialSyncCheckpoint(String featureKey);
+  Future<SyncCheckpoint?> getInitialSyncCheckpoint(String featureKey);
 
   /// Updates the last checkpoint used by the initial sync process for [featureKey].
   /// This is kept separate from the background sync checkpoint to avoid conflicts.
-  Future<void> updateLastInitialSyncCheckpoint(
+  Future<void> updateInitialSyncCheckpoint(
     String featureKey,
     SyncCheckpoint? checkpoint,
   );
@@ -33,11 +33,11 @@ abstract class SyncMetaDataRepo {
 
   /// Returns the last checkpoint from a successful background sync for [featureKey].
   /// Used for resumable, incremental syncing.
-  Future<SyncCheckpoint?> getLastBackgroundSyncCheckpoint(String featureKey);
+  Future<SyncCheckpoint?> getBackgroundSyncCheckpoint(String featureKey);
 
   /// Updates the last checkpoint from a successful background sync for [featureKey].
   /// Stores (lastUpdatedAt, lastItemId) for deterministic pagination.
-  Future<void> updateLastBackgroundSyncCheckpoint(
+  Future<void> updateBackgroundSyncCheckpoint(
     String featureKey,
     SyncCheckpoint? checkpoint,
   );
@@ -51,13 +51,12 @@ class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
   final Map<String, SyncCheckpoint?> _backgroundCheckpoints = {};
 
   @override
-  Future<SyncCheckpoint?> getLastInitialSyncCheckpoint(
-      String featureKey) async {
+  Future<SyncCheckpoint?> getInitialSyncCheckpoint(String featureKey) async {
     return _initialCheckpoints[featureKey];
   }
 
   @override
-  Future<void> updateLastInitialSyncCheckpoint(
+  Future<void> updateInitialSyncCheckpoint(
     String featureKey,
     SyncCheckpoint? checkpoint,
   ) async {
@@ -88,13 +87,12 @@ class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
   }
 
   @override
-  Future<SyncCheckpoint?> getLastBackgroundSyncCheckpoint(
-      String featureKey) async {
+  Future<SyncCheckpoint?> getBackgroundSyncCheckpoint(String featureKey) async {
     return _backgroundCheckpoints[featureKey];
   }
 
   @override
-  Future<void> updateLastBackgroundSyncCheckpoint(
+  Future<void> updateBackgroundSyncCheckpoint(
     String featureKey,
     SyncCheckpoint? checkpoint,
   ) async {

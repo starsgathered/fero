@@ -50,6 +50,13 @@ class FeroSync {
   /// Maximum allowed batch size in production (cap)
   final int maxBatchSize;
 
+  /// Stream to observe raw sync events for logging or UI updates
+  Stream<SyncEvent> get initialSyncEventStream => _initialManager.eventStream;
+
+  /// Stream to observe background sync events
+  Stream<SyncEvent>? get backgroundSyncEventStream =>
+      _backgroundManager?.eventStream;
+
   /// Optional subscription to listen to events internally
   StreamSubscription? _eventSubscription;
   bool _autoBackgroundSyncSetup = false; // Track if listener is already set up
@@ -149,18 +156,6 @@ class FeroSync {
   Future<void> startSync() async {
     await _initialManager.run();
   }
-
-  /// Emit a sync event manually
-  void emitSyncEvent(SyncEvent event) {
-    _initialManager.emitEvent(event);
-  }
-
-  /// Stream to observe raw sync events for logging or UI updates
-  Stream<SyncEvent> get initialSyncEventStream => _initialManager.eventStream;
-
-  /// Stream to observe background sync events
-  Stream<SyncEvent>? get backgroundSyncEventStream =>
-      _backgroundManager?.eventStream;
 
   /// Manually trigger background sync for all features
   void syncAll() {

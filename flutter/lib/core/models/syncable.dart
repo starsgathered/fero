@@ -25,7 +25,7 @@ abstract class LocalItem implements Syncable {
 /// Items from server - always have syncId assigned by server
 abstract class ServerItem implements Syncable {
   /// Sync identifier - guaranteed to exist (server-assigned, monotonic)
-  int get syncId;
+  BigInt get syncId;
 
   /// Last updated timestamp from server
   DateTime get updatedAt;

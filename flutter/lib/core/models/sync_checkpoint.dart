@@ -11,14 +11,14 @@
 class SyncCheckpoint {
   /// Fetch items AFTER this ID. Query: WHERE syncId > afterId
   /// Example: afterId=100 → fetch items 101, 102, 103...
-  final int afterId;
+  final BigInt afterId;
 
   const SyncCheckpoint({
     required this.afterId,
   });
 
   /// Create checkpoint from a syncable item
-  factory SyncCheckpoint.fromSyncable(int syncId) {
+  factory SyncCheckpoint.fromSyncable(BigInt syncId) {
     return SyncCheckpoint(
       afterId: syncId,
     );
@@ -27,14 +27,14 @@ class SyncCheckpoint {
   /// Serialize to map for storage
   Map<String, dynamic> toJson() {
     return {
-      'afterId': afterId,
+      'afterId': afterId.toString(),
     };
   }
 
   /// Deserialize from stored map
   factory SyncCheckpoint.fromJson(Map<String, dynamic> json) {
     return SyncCheckpoint(
-      afterId: json['afterId'] as int,
+      afterId: BigInt.parse(json['afterId'] as String),
     );
   }
 
