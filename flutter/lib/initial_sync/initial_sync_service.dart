@@ -9,10 +9,6 @@ abstract class InitialSyncService {
   /// Run initial sync for all handlers.
   Future<void> run();
 
-  /// Listen to incoming sync events from Fero server.
-  /// This should be called once during app initialization.
-  Future<void> startListeningToEvents();
-
   /// Manually emit a sync event (useful for testing or advanced scenarios).
   void emitEvent(SyncEvent event);
 

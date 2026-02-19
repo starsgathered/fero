@@ -147,7 +147,6 @@ class FeroSync {
 
   /// Start listening to sync events
   Future<void> startSync() async {
-    await _initialManager.startListeningToEvents();
     await _initialManager.run();
   }
 

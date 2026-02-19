@@ -116,28 +116,6 @@ class InitialSyncManager implements InitialSyncService {
     }
   }
 
-  @override
-  Future<void> startListeningToEvents() async {
-    // Listen to events and process them
-    _eventController.stream.listen(
-      _handleSyncEvent,
-      onError: (error) {
-        // Errors are handled via events
-      },
-    );
-  }
-
-  /// Handle incoming sync events from the stream.
-  void _handleSyncEvent(SyncEvent event) async {
-    if (event is InitialSyncRequiredEvent) {
-      try {
-        await _performSync(event.featureKey);
-      } catch (e) {
-        // Error logged via status stream
-      }
-    }
-  }
-
   /// Perform initial sync for a feature using batch operations.
   /// Fetches and applies multiple items in bulk for performance.
   Future<void> _performSync(String featureKey) async {
