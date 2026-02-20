@@ -2,6 +2,7 @@
 
 **Fero** is a lightweight, scalable **sync orchestration SDK** designed to standardize and simplify data synchronization across platforms and frameworks.
 It abstracts **retry logic, backoff strategies, sync state, and orchestration**, so application code stays clean while sync behavior remains consistent.
+Fero means "circulate" (from "pheero" / "phiro" — "move here and there").
 
 > Build once. Sync everywhere.
 
