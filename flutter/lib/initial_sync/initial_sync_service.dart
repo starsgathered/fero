@@ -6,8 +6,6 @@ abstract class InitialSyncService {
   /// Stream of sync events (from server and local operations).
   Stream<SyncEvent> get eventStream;
 
-  Stream<bool> get isCompletedStream;
-
   /// Run initial sync for all handlers.
   Future<void> run();
 

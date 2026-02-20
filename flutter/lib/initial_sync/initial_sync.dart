@@ -33,18 +33,12 @@ class InitialSyncManager implements InitialSyncService {
   final StreamController<SyncEvent> _eventController =
       StreamController.broadcast();
 
-  final StreamController<bool> _isCompletedController =
-      StreamController.broadcast();
-
   bool _isRunning = false;
   bool _isCancelled = false;
   bool? _hasEverCompleted; // Track if full sync ever completed
 
   @override
   Stream<SyncEvent> get eventStream => _eventController.stream;
-
-  @override
-  Stream<bool> get isCompletedStream => _isCompletedController.stream;
 
   InitialSyncManager({
     required Map<String, FeatureInitialSyncConfig> featureConfigs,
@@ -82,7 +76,6 @@ class InitialSyncManager implements InitialSyncService {
       // Already completed before, emit different event
       _emitEvent(
           FullInitialSyncAlreadyCompletedEvent(totalFeatures: totalFeatures));
-      _emitIsCompleted(true);
       return;
     }
     _isRunning = true;
@@ -102,7 +95,6 @@ class InitialSyncManager implements InitialSyncService {
 
       // Only emit FullInitialSyncCompletedEvent if this is the first time completing
       _hasEverCompleted = true;
-      _emitIsCompleted(true);
       _emitEvent(
           FullInitialSyncCompletedEvent(totalFeatures: featuresToSync.length));
     } catch (e) {
@@ -190,7 +182,6 @@ class InitialSyncManager implements InitialSyncService {
   @override
   void dispose() {
     _eventController.close();
-    _isCompletedController.close();
     _isRunning = false;
     _isCancelled = false;
     _hasEverCompleted = null;
@@ -198,9 +189,5 @@ class InitialSyncManager implements InitialSyncService {
 
   void _emitEvent(SyncEvent event) {
     if (!_eventController.isClosed) _eventController.add(event);
-  }
-
-  void _emitIsCompleted(bool event) {
-    if (!_isCompletedController.isClosed) _isCompletedController.add(event);
   }
 }

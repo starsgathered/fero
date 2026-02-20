@@ -4,6 +4,7 @@ import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/events/sync_event.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
+import 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
 import 'package:fero_sync/background_sync/background_sync.dart';
 import 'package:fero_sync/background_sync/feature_sync_config.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
@@ -51,8 +52,6 @@ class FeroSync {
 
   /// Stream to observe raw sync events for logging or UI updates
   Stream<SyncEvent> get initialSyncEventStream => _initialManager.eventStream;
-  Stream<bool> get initialIsCompletedEventStream =>
-      _initialManager.isCompletedStream;
 
   /// Stream to observe background sync events
   Stream<SyncEvent>? get backgroundSyncEventStream =>
@@ -144,9 +143,11 @@ class FeroSync {
     if (_autoBackgroundSyncSetup) return;
 
     _autoBackgroundSyncSetup = true;
-    _eventSubscription = _initialManager.isCompletedStream.listen((completed) {
-      if (completed) {
-        // Full initial sync completed → trigger background sync
+    _eventSubscription = _initialManager.eventStream.listen((event) {
+      print("event: ${event}");
+      if (event is FullInitialSyncCompletedEvent ||
+          event is FullInitialSyncAlreadyCompletedEvent) {
+        // Start background sync for the feature that just completed initial sync
         _backgroundManager?.syncAll();
       }
     });
