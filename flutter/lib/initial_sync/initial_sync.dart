@@ -1,13 +1,13 @@
 import 'dart:async';
 
+import 'package:fero_sync/initial_sync/enum/initial_sync_status.dart';
 import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/exceptions.dart';
-import 'package:fero_sync/core/events/sync_event.dart';
 import 'package:fero_sync/core/sync_executor.dart';
-import 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 import 'package:fero_sync/initial_sync/initial_sync_service.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
+import 'package:flutter/foundation.dart';
 
 /// Configuration for a feature's initial sync behavior.
 class FeatureInitialSyncConfig {
@@ -30,15 +30,12 @@ class InitialSyncManager implements InitialSyncService {
   final int maxBatchSize;
   final SyncMetaDataRepo metaRepo;
 
-  final StreamController<SyncEvent> _eventController =
-      StreamController.broadcast();
-
   bool _isRunning = false;
   bool _isCancelled = false;
   bool? _hasEverCompleted; // Track if full sync ever completed
 
-  @override
-  Stream<SyncEvent> get eventStream => _eventController.stream;
+  final ValueNotifier<InitialSyncStatus> statusNotifier =
+      ValueNotifier(InitialSyncStatus.notStarted);
 
   InitialSyncManager({
     required Map<String, FeatureInitialSyncConfig> featureConfigs,
@@ -68,25 +65,17 @@ class InitialSyncManager implements InitialSyncService {
         await metaRepo.areAllInitialSyncsCompleted(featuresToSync);
     if (allCompleted) {
       _hasEverCompleted = true;
-      // Emit individual feature events for consistency without modifying the list
-      final totalFeatures = featuresToSync.length;
-      for (final featureKey in featuresToSync) {
-        _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
-      }
-      // Already completed before, emit different event
-      _emitEvent(
-          FullInitialSyncAlreadyCompletedEvent(totalFeatures: totalFeatures));
+      _setStatus(InitialSyncStatus.completed);
       return;
     }
     _isRunning = true;
     _isCancelled = false;
+    _setStatus(InitialSyncStatus.running);
 
     try {
-      _emitEvent(InitialSyncRunningEvent());
-
       for (final featureKey in featuresToSync) {
         if (_isCancelled) {
-          _emitEvent(InitialSyncCancelledEvent());
+          _setStatus(InitialSyncStatus.cancelled);
           throw OperationCancelledException('Initial sync cancelled');
         }
 
@@ -95,8 +84,7 @@ class InitialSyncManager implements InitialSyncService {
 
       // Only emit FullInitialSyncCompletedEvent if this is the first time completing
       _hasEverCompleted = true;
-      _emitEvent(
-          FullInitialSyncCompletedEvent(totalFeatures: featuresToSync.length));
+      _setStatus(InitialSyncStatus.completed);
     } catch (e) {
       if (!_isCancelled) {
         // Failed event handled by _performSync for specific features
@@ -110,8 +98,6 @@ class InitialSyncManager implements InitialSyncService {
   /// Perform initial sync for a feature using batch operations.
   /// Fetches and applies multiple items in bulk for performance.
   Future<void> _performSync(String featureKey) async {
-    _emitEvent(InitialSyncStartedEvent(featureKey: featureKey));
-
     try {
       final config = _featureConfigs[featureKey];
       if (config == null) {
@@ -122,13 +108,12 @@ class InitialSyncManager implements InitialSyncService {
       final handler = config.handler;
       if (_hasEverCompleted == true) {
         // If full sync already completed before, skip to avoid redundant work
-        _emitEvent(InitialSyncAlreadyCompletedEvent(featureKey: featureKey));
+        _setStatus(InitialSyncStatus.completed);
         return;
       }
       // If initial sync was already completed for this feature, skip it.
       final alreadyInitial = await metaRepo.isInitialSyncCompleted(featureKey);
       if (alreadyInitial) {
-        _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
         return;
       }
 
@@ -156,21 +141,12 @@ class InitialSyncManager implements InitialSyncService {
       );
 
       await metaRepo.setInitialSyncCompleted(featureKey, true);
-      _emitEvent(InitialSyncCompletedEvent(featureKey: featureKey));
+      _setStatus(InitialSyncStatus.completed);
     } catch (e) {
       if (!_isCancelled) {
-        final exception = e is Exception ? e : Exception(e.toString());
-        _emitEvent(
-            InitialSyncFailedEvent(featureKey: featureKey, error: exception));
+        _setStatus(InitialSyncStatus.failed);
       }
       rethrow;
-    }
-  }
-
-  @override
-  void emitEvent(SyncEvent event) {
-    if (!_eventController.isClosed) {
-      _eventController.add(event);
     }
   }
 
@@ -181,13 +157,13 @@ class InitialSyncManager implements InitialSyncService {
 
   @override
   void dispose() {
-    _eventController.close();
+    statusNotifier.dispose();
     _isRunning = false;
     _isCancelled = false;
     _hasEverCompleted = null;
   }
 
-  void _emitEvent(SyncEvent event) {
-    if (!_eventController.isClosed) _eventController.add(event);
+  void _setStatus(InitialSyncStatus status) {
+    statusNotifier.value = status;
   }
 }

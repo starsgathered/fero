@@ -1,16 +1,16 @@
 import 'dart:async';
 
+import 'package:fero_sync/initial_sync/enum/initial_sync_status.dart';
 import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/events/sync_event.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
-import 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
 import 'package:fero_sync/background_sync/background_sync.dart';
 import 'package:fero_sync/background_sync/feature_sync_config.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
+import 'package:flutter/foundation.dart';
 
 // Export events for external consumption
-export 'package:fero_sync/initial_sync/events/initial_sync_events.dart';
 export 'package:fero_sync/background_sync/events/background_sync_events.dart';
 export 'package:fero_sync/core/events/sync_event.dart';
 
@@ -50,16 +50,16 @@ class FeroSync {
   /// Maximum allowed batch size in production (cap)
   final int maxBatchSize;
 
-  /// Stream to observe raw sync events for logging or UI updates
-  Stream<SyncEvent> get initialSyncEventStream => _initialManager.eventStream;
+  ValueNotifier<InitialSyncStatus> get statusNotifier =>
+      _initialManager.statusNotifier;
 
   /// Stream to observe background sync events
   Stream<SyncEvent>? get backgroundSyncEventStream =>
       _backgroundManager?.eventStream;
 
   /// Optional subscription to listen to events internally
-  StreamSubscription? _eventSubscription;
   bool _autoBackgroundSyncSetup = false; // Track if listener is already set up
+  VoidCallback? _statusListener;
 
   /// Private constructor to enforce usage of the async factory `create`
   FeroSync._({
@@ -143,14 +143,13 @@ class FeroSync {
     if (_autoBackgroundSyncSetup) return;
 
     _autoBackgroundSyncSetup = true;
-    _eventSubscription = _initialManager.eventStream.listen((event) {
-      print("event: ${event}");
-      if (event is FullInitialSyncCompletedEvent ||
-          event is FullInitialSyncAlreadyCompletedEvent) {
-        // Start background sync for the feature that just completed initial sync
+    _statusListener = () {
+      if (_initialManager.statusNotifier.value == InitialSyncStatus.completed) {
         _backgroundManager?.syncAll();
       }
-    });
+    };
+
+    _initialManager.statusNotifier.addListener(_statusListener!);
   }
 
   /// Start listening to sync events
@@ -170,7 +169,11 @@ class FeroSync {
 
   /// Dispose resources when the FeroSync instance is no longer needed
   void dispose() {
-    _eventSubscription?.cancel();
+    if (_statusListener != null) {
+      _initialManager.statusNotifier.removeListener(_statusListener!);
+      _statusListener = null;
+    }
+
     _initialManager.dispose();
     _backgroundManager?.dispose();
   }
