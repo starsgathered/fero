@@ -31,11 +31,10 @@
 ## 0.4.4 - 2026-02-17
 - Remove unnecessary code from InitialSyncManager
 
-## 0.4.5 - 2026-02-17
-- **Breaking change**: Separated `Syncable` into `LocalItem` and `ServerItem` for type safety
-- **Added**: `updatedAt` DateTime field to `ServerItem` for timestamp tracking
-- **Added**: `updatedAt` DateTime field to `SyncCheckpoint` for better pagination
-- **Improved**: Example app now demonstrates User Preferences (initial sync), Contacts, and Messages (background sync)
-- **Improved**: Enhanced documentation with clearer examples and architecture diagrams
-- **Fixed**: `FeatureInitialSyncConfig` wrapper properly required for initial sync handlers
-- **Updated**: README.md with comprehensive guide for offline-first sync patterns
+## 0.4.5 - 2026-02-20
+
+- Improved initial sync robustness and cancellation handling.
+- Fixed a status notifier leak when disposing the initial sync manager.
+- Minor bug fixes in background sync and retry/backoff handling.
+- Updated example and documentation to match API refactorings.
+- Code cleanup and small performance improvements.

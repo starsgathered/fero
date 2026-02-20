@@ -50,7 +50,7 @@ class FeroSync {
   /// Maximum allowed batch size in production (cap)
   final int maxBatchSize;
 
-  ValueNotifier<InitialSyncStatus> get statusNotifier =>
+  ValueNotifier<InitialSyncStatus> get initialSyncNotifier =>
       _initialManager.statusNotifier;
 
   /// Stream to observe background sync events

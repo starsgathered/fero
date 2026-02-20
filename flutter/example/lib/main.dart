@@ -47,10 +47,17 @@ Future<void> main() async {
     metadataRepo: InMemorySyncMetaDataRepo(),
   );
 
+  feroSync.initialSyncNotifier.addListener(() {
+    print('📊 Initial Sync status: ${feroSync.initialSyncNotifier.value}');
+  });
+
   // Listen to sync events
   feroSync.backgroundSyncEventStream?.listen((event) {
     print('📡 ${event.runtimeType}');
   });
+
+  // Start syncing (initial + background)
+  feroSync.startSync();
 
   await Future.delayed(Duration(seconds: 1));
   print('\n✅ Sync complete!\n');

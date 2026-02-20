@@ -1,6 +1,7 @@
 # Fero
 
 **Fero** is a **Flutter/Dart offline-first sync library** that orchestrates bidirectional data synchronization between your app and server with built-in conflict resolution, retry logic, and pagination support.
+Fero means "circulate" (from "pheero" / "phiro" — "move here and there").
 
 ## Features
 
@@ -207,12 +208,11 @@ feroSync.backgroundSyncEventStream?.listen((event) {
 ### Feature Dependencies
 
 Ensure features sync in the correct order:
-
 ```dart
 backgroundSyncConfigs: {
   'users': FeatureSyncConfig(
-    handler: UserSyncHandler(),
-    priority: 100,
+  @override
+  final BigInt syncId;        // Monotonic ID for pagination (BigInt used by Fero)
   ),
   'posts': FeatureSyncConfig(
     handler: PostSyncHandler(),
@@ -225,7 +225,7 @@ backgroundSyncConfigs: {
     dependencies: ['posts'], // Wait for posts first
   ),
 }
-```
+        afterId: prefs.last.syncId,
 
 ### Pagination with Checkpoints
 
@@ -239,7 +239,7 @@ Future<SyncBatchResult> fetchRemoteChanges({
   // Use checkpoint to paginate
   final afterSyncId = checkpoint?.lastSyncId ?? 0;
   
-  final items = await api.fetchItems(
+              afterId: contacts.last.syncId,
     'SELECT * FROM items WHERE syncId > $afterSyncId LIMIT $batchSize'
   );
   
@@ -255,7 +255,7 @@ Future<SyncBatchResult> fetchRemoteChanges({
 }
 ```
 
-### Listen to Sync Events
+              afterId: lastMsg.syncId,
 
 ```dart
 feroSync.backgroundSyncEventStream?.listen((event) {
