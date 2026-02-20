@@ -170,8 +170,6 @@ class InitialSyncManager implements InitialSyncService {
             InitialSyncFailedEvent(featureKey: featureKey, error: exception));
       }
       rethrow;
-    } finally {
-      _isRunning = false;
     }
   }
 
