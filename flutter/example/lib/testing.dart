@@ -48,6 +48,7 @@ class _SocketTestPageState extends State<SocketTestPage> {
 
     // 3️⃣ Listen to incoming messages
     _feroSocket.onMessageReceived = (msg) {
+      print("message received: ${msg.text} from ${msg.userId}");
       setState(() {
         _messages.add(msg);
       });

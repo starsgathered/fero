@@ -1,42 +1,46 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:fero_sync/policies/backoff.dart';
-import 'package:fero_sync/socket/message-dto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:fero_sync/socket/message-dto.dart';
 
 typedef OnMessageReceived = void Function(MessageDto message);
 
+enum SocketConnectionState {
+  disconnected,
+  connecting,
+  connected,
+  reconnecting,
+}
+
 class FeroSocketService {
+  FeroSocketService._internal() {
+    debugPrint('[FeroSocket] Initialized');
+  }
+
   static final FeroSocketService _instance = FeroSocketService._internal();
   factory FeroSocketService() => _instance;
 
   WebSocketChannel? _channel;
   OnMessageReceived? onMessageReceived;
 
-  // Connection info
+  final String _namespace = '/fero';
   String? _host;
   int? _port;
   bool _useHttps = false;
-  final String _namespace = '/fero';
-
-  // Heartbeat & reconnect
-  Timer? _pingTimer;
   bool _manuallyDisconnected = false;
-  late RetryPolicy retryPolicy;
   final List<MessageDto> _pendingMessages = [];
-  StreamSubscription<ConnectivityResult>? _connectivitySub;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  SocketConnectionState _state = SocketConnectionState.disconnected;
+  SocketConnectionState get state => _state;
 
-  FeroSocketService._internal() {
-    retryPolicy = RetryPolicy(
-      backoff: ExponentialBackoffStrategy(baseMillis: 500, maxMillis: 30000),
-      maxRetries: 10,
-    );
+  void _setState(SocketConnectionState newState) {
+    debugPrint('[FeroSocket] State: $_state → $newState');
+    _state = newState;
   }
 
-  /// Connect to WebSocket
-  void connect({
+  Future<void> connect({
     required String host,
     int? port,
     bool useHttps = false,
@@ -47,149 +51,124 @@ class FeroSocketService {
     _manuallyDisconnected = false;
 
     if (!await _hasInternet()) {
-      debugPrint('[FeroSocket] No internet, waiting to connect...');
       _listenToConnectivity();
       return;
     }
-
-    _connectInternal();
+    _connectOnce();
   }
 
-  /// Internal connection
-  void _connectInternal() {
-    if (_host == null) return;
+  void disconnect() {
+    _manuallyDisconnected = true;
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
+    _channel?.sink.close();
+    _channel = null;
+    _setState(SocketConnectionState.disconnected);
+    debugPrint('[FeroSocket] Disconnected manually');
+  }
+
+  void sendMessage(MessageDto message) {
+    if (_state != SocketConnectionState.connected || _channel == null) {
+      _pendingMessages.add(message);
+      debugPrint(
+          '[FeroSocket] Queued message. Pending: ${_pendingMessages.length}');
+      return;
+    }
+    try {
+      _channel!.sink.add(jsonEncode(message.toJson()));
+      debugPrint('[FeroSocket] Sent: ${message.text}');
+    } catch (e) {
+      _pendingMessages.add(message);
+      debugPrint('[FeroSocket] Failed send, queued: $e');
+    }
+  }
+
+  Future<void> _connectOnce() async {
+    if (_host == null || _manuallyDisconnected) return;
+
+    _setState(SocketConnectionState.connecting);
 
     final scheme = _useHttps ? 'wss' : 'ws';
     final portPart = _port != null ? ':$_port' : '';
     final uri = Uri.parse('$scheme://$_host$portPart$_namespace');
 
-    try {
-      _channel?.sink.close(); // close existing
-      _channel = WebSocketChannel.connect(uri);
+    _channel?.sink.close();
 
-      _channel!.stream.listen(
-        _onMessage,
-        onDone: _onDisconnected,
-        onError: _onError,
-        cancelOnError: true,
-      );
+    _channel = WebSocketChannel.connect(uri);
 
-      _startHeartbeat();
-      _flushPendingMessages();
+    _channel!.stream.listen(
+      _onMessage,
+      onDone: _onDisconnected,
+      onError: _onError,
+      cancelOnError: true,
+    );
 
-      debugPrint('[FeroSocket] Connected to $uri');
-    } catch (e) {
-      debugPrint('[FeroSocket] Connection failed: $e');
-      _scheduleReconnect();
-    }
-  }
-
-  /// Connectivity listener for automatic reconnect
-  void _listenToConnectivity() {
-    Connectivity()
-        .onConnectivityChanged
-        .listen((List<ConnectivityResult> results) async {
-      // Check if any of the network types is online
-      final isOnline = results.any((r) =>
-          r != ConnectivityResult.wifi || r != ConnectivityResult.mobile);
-      if (isOnline && !_manuallyDisconnected) {
-        debugPrint('[FeroSocket] Internet available, trying reconnect...');
-        _connectInternal();
-      }
-    });
-  }
-
-  Future<bool> _hasInternet() async {
-    final results = await Connectivity().checkConnectivity();
-    final isOnline = results.any(
-        (r) => r != ConnectivityResult.wifi || r != ConnectivityResult.mobile);
-
-    return isOnline;
+    debugPrint('[FeroSocket] Attempting connection to $uri');
   }
 
   void _onMessage(dynamic message) {
+    if (_state != SocketConnectionState.connected) {
+      _setState(SocketConnectionState.connected);
+      _flushPendingMessages();
+    }
     try {
       final decoded = jsonDecode(message);
-      final dto = MessageDto.fromJson(decoded);
+      final dto = MessageDto(
+        text: decoded['text'] ?? '',
+        userId: decoded['userId'] ?? 'server',
+      );
       onMessageReceived?.call(dto);
+      debugPrint('[FeroSocket] Received: ${dto.text}');
     } catch (_) {
-      debugPrint('[FeroSocket] Raw message: $message');
+      debugPrint('[FeroSocket] Raw: $message');
     }
+  }
+
+  void _onError(Object e) {
+    if (_manuallyDisconnected) return;
+    debugPrint('[FeroSocket] Error: $e');
+    // No retry logic here
   }
 
   void _onDisconnected() {
-    debugPrint('[FeroSocket] Disconnected');
-    _stopHeartbeat();
-    _scheduleReconnect();
-  }
-
-  void _onError(error) {
-    debugPrint('[FeroSocket] Error: $error');
-    _stopHeartbeat();
-    _scheduleReconnect();
-  }
-
-  /// Send message
-  void sendMessage(MessageDto message) {
-    if (_channel == null) {
-      _pendingMessages.add(message);
-      debugPrint('[FeroSocket] Queued message, connection not ready');
-      return;
-    }
-
-    try {
-      _channel!.sink.add(jsonEncode(message.toJson()));
-    } catch (_) {
-      _pendingMessages.add(message);
-      debugPrint('[FeroSocket] Queued message due to send error');
-    }
+    if (_manuallyDisconnected) return;
+    debugPrint('[FeroSocket] Server closed connection');
+    // No retry logic here
   }
 
   void _flushPendingMessages() {
-    for (var msg in _pendingMessages) {
-      sendMessage(msg);
+    if (_channel == null) return;
+    for (final msg in _pendingMessages) {
+      try {
+        _channel!.sink.add(jsonEncode(msg.toJson()));
+      } catch (_) {
+        break;
+      }
     }
     _pendingMessages.clear();
   }
 
-  /// Disconnect manually
-  void disconnect() {
-    _manuallyDisconnected = true;
-    _stopHeartbeat();
-    _channel?.sink.close();
-    _connectivitySub?.cancel();
-    _connectivitySub = null;
+  Future<bool> _hasInternet() async {
+    final results = await Connectivity().checkConnectivity();
+    return results.contains(ConnectivityResult.wifi) ||
+        results.contains(ConnectivityResult.mobile) ||
+        results.contains(ConnectivityResult.ethernet);
   }
 
-  void _startHeartbeat() {
-    _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 20), (_) {
-      if (_channel != null) {
-        try {
-          _channel!.sink.add(jsonEncode({'type': 'ping'}));
-        } catch (_) {}
+  void _listenToConnectivity() {
+    _connectivitySub?.cancel();
+    _connectivitySub = Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> results) async {
+      final isOnline = results.contains(ConnectivityResult.wifi) ||
+          results.contains(ConnectivityResult.mobile) ||
+          results.contains(ConnectivityResult.ethernet);
+      debugPrint('[FeroSocket] Connectivity changed. Online: $isOnline');
+      if (isOnline &&
+          !_manuallyDisconnected &&
+          _state != SocketConnectionState.connected) {
+        _connectOnce();
       }
     });
-  }
-
-  void _stopHeartbeat() {
-    _pingTimer?.cancel();
-    _pingTimer = null;
-  }
-
-  void _scheduleReconnect() {
-    // Agar manually disconnected hai, to reconnect mat karo
-    if (_manuallyDisconnected) return;
-
-    // Attempt reconnect using retryPolicy
-    retryPolicy.attempt(
-      () async {
-        if (_manuallyDisconnected) return;
-
-        debugPrint('[FeroSocket] Attempting reconnect...');
-        _connectInternal();
-      },
-      isCancelled: () => _manuallyDisconnected,
-    );
   }
 }
