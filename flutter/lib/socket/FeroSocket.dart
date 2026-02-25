@@ -129,6 +129,23 @@ class FeroSocketService {
   void _onMessage(dynamic message) {
     try {
       final decoded = jsonDecode(message);
+      // Handle validation error from server
+      if (decoded['error'] != null &&
+          decoded['error']['code'] == 'VALIDATION_FAILED') {
+        final fields = decoded['error']['details']['fields'] as List<dynamic>?;
+
+        final serviceField = fields?.firstWhere((f) => f['field'] == 'service',
+            orElse: () => null);
+
+        if (serviceField != null) {
+          debugPrint(
+              '[FeroSocket] Invalid service parameter, stopping retries.');
+          _manuallyDisconnected = true;
+          onConnectionFailed?.call(_retryCount);
+          _setState(SocketConnectionState.disconnected);
+          return;
+        }
+      }
       final dto = MessageDto(
         text: decoded['text'] ?? '',
         userId: decoded['userId'] ?? 'server',
