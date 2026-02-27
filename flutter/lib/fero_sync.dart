@@ -1,18 +1,14 @@
 import 'dart:async';
 
+import 'package:fero_sync/background_sync/feature_sync_status.dart';
 import 'package:fero_sync/initial_sync/enum/initial_sync_status.dart';
 import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
-import 'package:fero_sync/core/events/sync_event.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/background_sync/background_sync.dart';
 import 'package:fero_sync/background_sync/feature_sync_config.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:flutter/foundation.dart';
-
-// Export events for external consumption
-export 'package:fero_sync/background_sync/events/background_sync_events.dart';
-export 'package:fero_sync/core/events/sync_event.dart';
 
 /// --- FeroSync ---
 /// Main orchestrator for syncing multiple features using handlers.
@@ -54,8 +50,9 @@ class FeroSync {
       _initialManager.statusNotifier;
 
   /// Stream to observe background sync events
-  Stream<SyncEvent>? get backgroundSyncEventStream =>
-      _backgroundManager?.eventStream;
+  ValueNotifier<SyncProcessStatus>? backgroundSyncNotifier(String featureKey) {
+    return _backgroundManager?.getFeatureStatus(featureKey).statusNotifier;
+  }
 
   /// Optional subscription to listen to events internally
   bool _autoBackgroundSyncSetup = false; // Track if listener is already set up

@@ -1,72 +1,71 @@
 import 'dart:async';
-import 'package:fero_sync/core/results/apply_result.dart';
 import 'package:fero_sync/background_sync/background_sync_handler.dart';
-import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
-import 'package:fero_sync/initial_sync/initial_sync.dart';
-import 'package:fero_sync/core/results/sync_batch_result.dart';
-import 'package:fero_sync/core/sync_metadata_repo.dart';
-import 'package:fero_sync/core/models/sync_payload.dart';
-import 'package:fero_sync/core/models/syncable.dart';
 import 'package:fero_sync/core/models/sync_checkpoint.dart';
+import 'package:fero_sync/core/models/sync_payload.dart';
+import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 import 'package:fero_sync/fero_sync.dart';
+import 'package:fero_sync/core/models/syncable.dart';
+import 'package:fero_sync/core/sync_metadata_repo.dart';
+import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/background_sync/feature_sync_config.dart';
+import 'package:fero_sync/core/results/apply_result.dart';
+import 'package:fero_sync/core/results/sync_batch_result.dart';
 
-// 🎯 FeroSync Example - User, Contacts & Messages
-// =================================================
-// Sync user preferences, contacts, and messages
-
-// STEP 1: Set up and run
-// --------------------------------
-
+// ==========================
+// STEP 1: Set up FeroSync
+// ==========================
 Future<void> main() async {
   print('🚀 FeroSync - User, Contacts & Messages\n');
 
-  // Create FeroSync with multiple feature handlers
   final feroSync = await FeroSync.create(
-    // Initial sync: Runs once when user logs in or app is first installed
-    // Downloads essential data needed before the app can be used
     initialSyncConfigs: {
       'user_preferences': FeatureInitialSyncConfig(
         handler: UserPreferencesInitialSyncHandler(),
         priority: 100,
       ),
     },
-    // Background sync: Runs periodically to keep data fresh
-    // Handles incremental updates after initial sync is complete
     backgroundSyncConfigs: {
       'contacts': FeatureSyncConfig(
         handler: ContactSyncHandler(),
-        priority: 100, // Sync contacts first
+        priority: 90,
       ),
       'messages': FeatureSyncConfig(
         handler: MessageSyncHandler(),
-        priority: 90, // Then messages
-        dependencies: ['contacts'], // Messages depend on contacts
+        priority: 80,
+        dependencies: ['contacts'],
       ),
     },
     metadataRepo: InMemorySyncMetaDataRepo(),
   );
 
+  // Listen to initial sync status
   feroSync.initialSyncNotifier.addListener(() {
     print('📊 Initial Sync status: ${feroSync.initialSyncNotifier.value}');
   });
 
-  // Listen to sync events
-  feroSync.backgroundSyncEventStream?.listen((event) {
-    print('📡 ${event.runtimeType}');
+  // Listen to feature-level background sync status
+  final contactsStatus = feroSync.backgroundSyncNotifier('contacts');
+  contactsStatus?.addListener(() {
+    print('📇 Contacts Sync Status: ${contactsStatus.value}');
   });
 
-  // Start syncing (initial + background)
-  feroSync.startSync();
+  final messagesStatus = feroSync.backgroundSyncNotifier('messages');
+  messagesStatus?.addListener(() {
+    print('💬 Messages Sync Status: ${messagesStatus.value}');
+  });
 
-  await Future.delayed(Duration(seconds: 1));
-  print('\n✅ Sync complete!\n');
+  // Start initial + background sync
+  await feroSync.startSync();
+
+  // Trigger manual background sync (optional)
+  feroSync.syncAll();
 }
 
-// STEP 2: Define your data models
-// --------------------------------
+// ==========================
+// STEP 2: Data Models
+// ==========================
 
-/// Local UserPreferences
+// Local & Server UserPreferences
 class LocalUserPreferences implements LocalItem {
   @override
   final String id;
@@ -74,7 +73,6 @@ class LocalUserPreferences implements LocalItem {
   final int version;
   @override
   final bool locallyModified;
-
   final String userId;
   final String displayName;
   final String theme;
@@ -89,7 +87,6 @@ class LocalUserPreferences implements LocalItem {
   });
 }
 
-/// Server UserPreferences
 class ServerUserPreferences implements ServerItem {
   @override
   final String id;
@@ -99,7 +96,6 @@ class ServerUserPreferences implements ServerItem {
   final int version;
   @override
   final DateTime updatedAt;
-
   final String userId;
   final String displayName;
   final String theme;
@@ -115,7 +111,7 @@ class ServerUserPreferences implements ServerItem {
   });
 }
 
-/// Local Contact
+// Local & Server Contact
 class LocalContact implements LocalItem {
   @override
   final String id;
@@ -123,7 +119,6 @@ class LocalContact implements LocalItem {
   final int version;
   @override
   final bool locallyModified;
-
   final String name;
   final String email;
 
@@ -136,7 +131,6 @@ class LocalContact implements LocalItem {
   });
 }
 
-/// Server Contact
 class ServerContact implements ServerItem {
   @override
   final String id;
@@ -146,7 +140,6 @@ class ServerContact implements ServerItem {
   final int version;
   @override
   final DateTime updatedAt;
-
   final String name;
   final String email;
 
@@ -160,7 +153,7 @@ class ServerContact implements ServerItem {
   });
 }
 
-/// Local Message
+// Local & Server Message
 class LocalMessage implements LocalItem {
   @override
   final String id;
@@ -168,7 +161,6 @@ class LocalMessage implements LocalItem {
   final int version;
   @override
   final bool locallyModified;
-
   final String contactId;
   final String text;
 
@@ -181,7 +173,6 @@ class LocalMessage implements LocalItem {
   });
 }
 
-/// Server Message
 class ServerMessage implements ServerItem {
   @override
   final String id;
@@ -191,7 +182,6 @@ class ServerMessage implements ServerItem {
   final int version;
   @override
   final DateTime updatedAt;
-
   final String contactId;
   final String text;
 
@@ -205,15 +195,13 @@ class ServerMessage implements ServerItem {
   });
 }
 
-// Initial Sync Handler: For first-time data load
+// ==========================
+// STEP 3: Initial Sync Handler
+// ==========================
 class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
   @override
-  Future<SyncBatchResult> fetchRemoteData({
-    checkpoint,
-    required int batchSize,
-  }) async {
-    // Load user preferences from server on first login
-    // This is essential data needed before the app can function
+  Future<SyncBatchResult> fetchRemoteData(
+      {checkpoint, required int batchSize}) async {
     final serverPreferences = [
       ServerUserPreferences(
         id: 's1',
@@ -233,11 +221,8 @@ class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
       items: serverPreferences
           .map((p) => SyncPayload<ServerItem>(data: p))
           .toList(),
-      checkpoint: lastItem != null
-          ? SyncCheckpoint(
-              afterId: lastItem.syncId,
-            )
-          : null,
+      checkpoint:
+          lastItem != null ? SyncCheckpoint(afterId: lastItem.syncId) : null,
     );
   }
 
@@ -249,63 +234,51 @@ class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
   }
 }
 
-// Background Sync Handler: For incremental updates
-
-// STEP 3: Implement sync handlers
-// --------------------------------
-
+// ==========================
+// STEP 4: Background Sync Handlers
+// ==========================
 class ContactSyncHandler extends BackgroundSyncHandler {
   final List<LocalContact> _contacts = [
     LocalContact(
-      id: 'c1',
-      name: 'Alice',
-      email: 'alice@example.com',
-      version: 1,
-      locallyModified: true,
-    ),
+        id: 'c1',
+        name: 'Alice',
+        email: 'alice@example.com',
+        version: 1,
+        locallyModified: true),
   ];
 
   @override
-  Future<List<SyncPayload<LocalItem>>> getLocallyModified() async {
-    return _contacts
-        .where((c) => c.locallyModified)
-        .map((c) => SyncPayload<LocalItem>(data: c))
-        .toList();
-  }
+  Future<List<SyncPayload<LocalItem>>> getLocallyModified() async => _contacts
+      .where((c) => c.locallyModified)
+      .map((c) => SyncPayload<LocalItem>(data: c))
+      .toList();
 
   @override
   Future<SyncBatchResult> fetchRemoteChanges(
       {checkpoint, required int batchSize}) async {
     final serverContacts = [
       ServerContact(
-        id: 'c1',
-        name: 'Alice',
-        email: 'alice@example.com',
-        syncId: BigInt.from(100),
-        version: 1,
-        updatedAt: DateTime.now().subtract(Duration(minutes: 5)),
-      ),
+          id: 'c1',
+          name: 'Alice',
+          email: 'alice@example.com',
+          syncId: BigInt.from(100),
+          version: 1,
+          updatedAt: DateTime.now().subtract(Duration(minutes: 5))),
       ServerContact(
-        id: 'c2',
-        name: 'Bob',
-        email: 'bob@example.com',
-        syncId: BigInt.from(101),
-        version: 1,
-        updatedAt: DateTime.now(),
-      ),
+          id: 'c2',
+          name: 'Bob',
+          email: 'bob@example.com',
+          syncId: BigInt.from(101),
+          version: 1,
+          updatedAt: DateTime.now()),
     ];
-
-    // last item picked for checkpointing to ensure correct pagination
     final lastItem = serverContacts.isNotEmpty ? serverContacts.last : null;
 
     return SyncBatchResult.success(
       items:
           serverContacts.map((c) => SyncPayload<ServerItem>(data: c)).toList(),
-      checkpoint: lastItem != null
-          ? SyncCheckpoint(
-              afterId: lastItem.syncId,
-            )
-          : null,
+      checkpoint:
+          lastItem != null ? SyncCheckpoint(afterId: lastItem.syncId) : null,
     );
   }
 
@@ -327,45 +300,38 @@ class ContactSyncHandler extends BackgroundSyncHandler {
 class MessageSyncHandler extends BackgroundSyncHandler {
   final List<LocalMessage> _messages = [
     LocalMessage(
-      id: 'm1',
-      contactId: 'c1',
-      text: 'Hey, how are you?',
-      version: 1,
-      locallyModified: true,
-    ),
+        id: 'm1',
+        contactId: 'c1',
+        text: 'Hey, how are you?',
+        version: 1,
+        locallyModified: true),
   ];
 
   @override
-  Future<List<SyncPayload<LocalItem>>> getLocallyModified() async {
-    return _messages
-        .where((m) => m.locallyModified)
-        .map((m) => SyncPayload<LocalItem>(data: m))
-        .toList();
-  }
+  Future<List<SyncPayload<LocalItem>>> getLocallyModified() async => _messages
+      .where((m) => m.locallyModified)
+      .map((m) => SyncPayload<LocalItem>(data: m))
+      .toList();
 
   @override
   Future<SyncBatchResult> fetchRemoteChanges(
       {checkpoint, required int batchSize}) async {
     final serverMessages = [
       ServerMessage(
-        id: 'm2',
-        contactId: 'c2',
-        text: 'Welcome to FeroSync!',
-        syncId: BigInt.from(201),
-        version: 1,
-        updatedAt: DateTime.now(),
-      ),
+          id: 'm2',
+          contactId: 'c2',
+          text: 'Welcome to FeroSync!',
+          syncId: BigInt.from(201),
+          version: 1,
+          updatedAt: DateTime.now()),
     ];
-    final lastMsg = serverMessages.isNotEmpty ? serverMessages.last : null;
+    final lastItem = serverMessages.isNotEmpty ? serverMessages.last : null;
 
     return SyncBatchResult.success(
       items:
           serverMessages.map((m) => SyncPayload<ServerItem>(data: m)).toList(),
-      checkpoint: lastMsg != null
-          ? SyncCheckpoint(
-              afterId: lastMsg.syncId,
-            )
-          : null,
+      checkpoint:
+          lastItem != null ? SyncCheckpoint(afterId: lastItem.syncId) : null,
     );
   }
 

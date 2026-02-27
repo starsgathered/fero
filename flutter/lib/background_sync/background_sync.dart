@@ -1,13 +1,12 @@
 import 'dart:async';
 
+import 'package:fero_sync/background_sync/feature_sync_status.dart';
 import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/core/exceptions.dart';
 import 'package:fero_sync/core/results/apply_result.dart';
 import 'package:fero_sync/core/sync_executor.dart';
 import 'package:fero_sync/background_sync/feature_sync_config.dart';
-import 'package:fero_sync/core/events/sync_event.dart';
-import 'package:fero_sync/background_sync/events/background_sync_events.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:fero_sync/core/models/sync_payload.dart';
 import 'package:fero_sync/core/models/syncable.dart';
@@ -28,8 +27,7 @@ class BackgroundSyncManager {
   final int batchSize;
   final ConflictResolutionStrategy conflictStrategy;
 
-  final StreamController<SyncEvent> _eventController =
-      StreamController.broadcast();
+  final Map<String, FeatureSyncStatus> _featureStatuses = {};
 
   int _activeSync = 0;
   bool _disposed = false;
@@ -59,6 +57,14 @@ class BackgroundSyncManager {
     _validateDependencies();
   }
 
+  /// Get or create feature-level status
+  FeatureSyncStatus getFeatureStatus(String featureKey) {
+    return _featureStatuses.putIfAbsent(
+      featureKey,
+      () => FeatureSyncStatus(featureKey: featureKey),
+    );
+  }
+
   /// Validate that all dependencies reference registered features
   void _validateDependencies() {
     for (final entry in _featureConfigs.entries) {
@@ -74,8 +80,6 @@ class BackgroundSyncManager {
       }
     }
   }
-
-  Stream<SyncEvent> get eventStream => _eventController.stream;
 
   /// Start background sync for a specific feature.
   /// Respects concurrency limits, priority ordering, and dependencies.
@@ -153,7 +157,8 @@ class BackgroundSyncManager {
 
   /// Perform incremental sync for a feature.
   Future<void> _performIncrementalSync(String featureKey) async {
-    _emitEvent(IncrementalSyncStartedEvent(featureKey: featureKey));
+    final featureStatus = getFeatureStatus(featureKey);
+    featureStatus.start();
 
     try {
       final config = _featureConfigs[featureKey];
@@ -215,12 +220,10 @@ class BackgroundSyncManager {
         initialCheckpoint: initialCheckpoint,
       );
 
-      _emitEvent(IncrementalSyncCompletedEvent(featureKey: featureKey));
+      featureStatus.complete();
       _completedSync.add(featureKey);
     } catch (e) {
-      _emitEvent(
-        IncrementalSyncFailedEvent(featureKey: featureKey, error: e.toString()),
-      );
+      featureStatus.fail(e.toString());
       // Mark as completed even on failure to unblock dependent features
       // Caller should handle retry logic based on events
       _completedSync.add(featureKey);
@@ -231,14 +234,7 @@ class BackgroundSyncManager {
     }
   }
 
-  void _emitEvent(SyncEvent event) {
-    if (!_eventController.isClosed) {
-      _eventController.add(event);
-    }
-  }
-
   void dispose() {
     _disposed = true;
-    _eventController.close();
   }
 }
