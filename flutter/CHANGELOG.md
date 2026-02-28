@@ -38,3 +38,10 @@
 - Minor bug fixes in background sync and retry/backoff handling.
 - Updated example and documentation to match API refactorings.
 - Code cleanup and small performance improvements.
+
+## 0.4.6 - 2026-02-28
+
+- Minor bug fixes and stability improvements.
+- Improved sync reliability and retry/backoff handling.
+- Updated example and documentation to reflect latest API changes.
+- Small performance optimizations and code cleanup.
