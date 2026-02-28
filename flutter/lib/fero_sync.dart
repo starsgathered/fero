@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:fero_sync/background_sync/feature_sync_status.dart';
+import 'package:fero_sync/feature_sync/feature_sync_status.dart';
 import 'package:fero_sync/initial_sync/enum/initial_sync_status.dart';
 import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
-import 'package:fero_sync/background_sync/background_sync.dart';
-import 'package:fero_sync/background_sync/feature_sync_config.dart';
+import 'package:fero_sync/feature_sync/feature_sync.dart';
+import 'package:fero_sync/feature_sync/feature_sync_config.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:flutter/foundation.dart';
 

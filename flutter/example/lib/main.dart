@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:fero_sync/background_sync/background_sync_handler.dart';
+import 'package:fero_sync/feature_sync/feature_sync_handler.dart';
 import 'package:fero_sync/core/models/sync_checkpoint.dart';
 import 'package:fero_sync/core/models/sync_payload.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
@@ -7,7 +7,7 @@ import 'package:fero_sync/fero_sync.dart';
 import 'package:fero_sync/core/models/syncable.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
-import 'package:fero_sync/background_sync/feature_sync_config.dart';
+import 'package:fero_sync/feature_sync/feature_sync_config.dart';
 import 'package:fero_sync/core/results/apply_result.dart';
 import 'package:fero_sync/core/results/sync_batch_result.dart';
 
@@ -234,7 +234,7 @@ class UserPreferencesInitialSyncHandler extends InitialSyncHandler {
 // ==========================
 // STEP 4: Background Sync Handlers
 // ==========================
-class ContactSyncHandler extends BackgroundSyncHandler {
+class ContactSyncHandler extends FeatureSyncHandler {
   final List<LocalContact> _contacts = [
     LocalContact(
         id: 'c1',
@@ -294,7 +294,7 @@ class ContactSyncHandler extends BackgroundSyncHandler {
   }
 }
 
-class MessageSyncHandler extends BackgroundSyncHandler {
+class MessageSyncHandler extends FeatureSyncHandler {
   final List<LocalMessage> _messages = [
     LocalMessage(
         id: 'm1',
