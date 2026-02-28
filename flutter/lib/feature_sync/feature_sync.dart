@@ -83,13 +83,14 @@ class FeatureSyncManager {
 
   /// Start background sync for a specific feature.
   /// Respects concurrency limits, priority ordering, and dependencies.
-  void syncFeature(String featureKey) {
+  void syncFeature(String featureKey, {bool force = false}) {
     if (_disposed) return;
     if (!_featureConfigs.containsKey(featureKey)) return;
 
-    // Add to queue and process
-    if (!_runningSync.contains(featureKey) &&
-        !_completedSync.contains(featureKey)) {
+    // Force push even if running or completed
+    if (force ||
+        (!_runningSync.contains(featureKey) &&
+            !_completedSync.contains(featureKey))) {
       _pendingQueue.add(featureKey);
     }
 
@@ -168,6 +169,19 @@ class FeatureSyncManager {
         );
       }
       final handler = config.handler;
+      while (true) {
+        final localBatch = await handler.getLocallyModified(
+          batchSize: batchSize,
+        );
+
+        if (localBatch.isEmpty) break;
+
+        final pushResult = await handler.pushLocalChanges(localBatch);
+        if (!pushResult.success) {
+          throw SyncFailedException(
+              'Failed to push local changes: ${pushResult.errors}');
+        }
+      }
 
       // Get last synced checkpoint
       final initialCheckpoint =

@@ -159,6 +159,12 @@ class FeroSync {
     _featureManager?.syncAll();
   }
 
+  /// Manually trigger a specific feature sync with optional force
+  /// Use `force: true` to push local changes even if feature is running or completed
+  void syncFeature(String featureKey, {bool force = false}) {
+    _featureManager?.syncFeature(featureKey, force: force);
+  }
+
   /// Cancel ongoing operations safely
   void cancel() {
     _initialManager.cancel();

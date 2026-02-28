@@ -8,7 +8,7 @@
 ## Features
 
 - ✅ Initial Sync (first-time load)
-- ✅ Background Sync (incremental updates)
+- ✅ Feature Sync (incremental updates)
 - ✅ Version-based Conflict Resolution
 - ✅ Checkpoint Pagination
 - ✅ Retry & Backoff (exponential or fixed)
@@ -30,7 +30,7 @@ final feroSync = await FeroSync.create(
   initialSyncConfigs: {
     'user_preferences': FeatureInitialSyncConfig(handler: UserPreferencesInitialSyncHandler(), priority: 100),
   },
-  backgroundSyncConfigs: {
+  featureSyncConfigs: {
     'contacts': FeatureSyncConfig(handler: ContactSyncHandler(), priority: 100),
     'messages': FeatureSyncConfig(handler: MessageSyncHandler(), priority: 90, dependencies: ['contacts']),
   },
@@ -40,8 +40,8 @@ await feroSync.startSync();
 ```
 
 * Listen to **initial sync status**: `feroSync.initialSyncNotifier`
-* Listen to **feature-level background sync**: `feroSync.backgroundSyncNotifier('contacts')`
-* Listen to **all sync events**: `feroSync.backgroundSyncEventStream`
+* Listen to **feature-level background sync**: `feroSync.featureSyncNotifier('contacts')`
+* Listen to **all sync events**: `feroSync.featureSyncNotifier`
 
 ---
 
@@ -82,7 +82,7 @@ Flutter App (UI)
    FeroSync Orchestrator
        │
  ┌─────┴─────┐
- │Initial Sync│ Background Sync
+ │Initial Sync│ Feature Sync (incremental sync)
  └─────┬─────┘
        │
    Your Handlers (fetchRemoteData, applyRemoteChanges, pushLocalChanges)
@@ -96,5 +96,5 @@ Flutter App (UI)
 ## Docs & Support
 
 * 📖 [Full Documentation](https://pub.dev/packages/fero_sync/example)
-* 🐛 [Issues](https://github.com/starsgathered/fero/issues)
+* 🐛 Found a bug or issue? Please post it on GitHub [Issues](https://github.com/starsgathered/fero/issues)
 * 💬 [Discussions](https://github.com/starsgathered/fero/discussions)

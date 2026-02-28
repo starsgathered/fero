@@ -25,11 +25,6 @@ import 'package:fero_sync/core/models/sync_checkpoint.dart';
 ///  clients only depend on methods they use.
 /// - focused solely on data transfer operations.
 abstract class FeatureSyncHandler {
-  /// Fetch locally modified items that need to be synced
-  /// Returns items that have changed locally and need to be pushed to server
-  Future<List<SyncPayload<LocalItem>>> getLocallyModifiedByIds(
-      {required List<String> ids});
-
   /// Fetch remote changes for sync with checkpoint-based pagination
   ///
   /// `checkpoint` indicates where to resume (null for first page)
@@ -46,6 +41,18 @@ abstract class FeatureSyncHandler {
   /// Returns success/failure with detailed errors
   Future<ApplyResult> applyRemoteChanges(
       List<SyncPayload<ServerItem>> remoteStates);
+
+  /// Fetch locally modified items that need to be synced
+  /// Returns items that have changed locally and need to be pushed to server
+  Future<List<SyncPayload<LocalItem>>> getLocallyModifiedByIds({
+    required List<String> ids,
+  });
+
+  /// Fetch locally modified items that need to be synced
+  /// Returns items that have changed locally and need to be pushed to server
+  Future<List<SyncPayload<LocalItem>>> getLocallyModified({
+    int batchSize = 50,
+  });
 
   /// Push local changes to remote server
   /// Returns success/failure with detailed errors
