@@ -29,7 +29,7 @@ keywords:
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.4.5
+version: 0.4.6
 
 environment:
   sdk: ">=3.1.0 <4.0.0"
@@ -47,8 +47,8 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  web_socket_channel: ^3.0.3
-  connectivity_plus: ^7.0.0
+  # web_socket_channel: ^3.0.3
+  # connectivity_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:

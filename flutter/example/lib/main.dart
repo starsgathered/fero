@@ -19,12 +19,14 @@ Future<void> main() async {
 
   final feroSync = await FeroSync.create(
     initialSyncConfigs: {
-      'user_preferences': FeatureInitialSyncConfig(
+      'user_preferences': InitialSyncConfig(
         handler: UserPreferencesInitialSyncHandler(),
         priority: 100,
       ),
     },
-    backgroundSyncConfigs: {
+    // Feature sync: Runs periodically to keep data fresh
+    // Handles incremental updates after initial sync is complete
+    featureSyncConfigs: {
       'contacts': FeatureSyncConfig(
         handler: ContactSyncHandler(),
         priority: 90,
@@ -43,19 +45,14 @@ Future<void> main() async {
     print('📊 Initial Sync status: ${feroSync.initialSyncNotifier.value}');
   });
 
-  // Listen to feature-level background sync status
-  final contactsStatus = feroSync.backgroundSyncNotifier('contacts');
-  contactsStatus?.addListener(() {
-    print('📇 Contacts Sync Status: ${contactsStatus.value}');
+  // Listen to sync events
+  feroSync.featureSyncNotifier('contacts')?.addListener(() {
+    print(
+        '📡 Contacts Sync status: ${feroSync.featureSyncNotifier('contacts')?.value}');
   });
 
-  final messagesStatus = feroSync.backgroundSyncNotifier('messages');
-  messagesStatus?.addListener(() {
-    print('💬 Messages Sync Status: ${messagesStatus.value}');
-  });
-
-  // Start initial + background sync
-  await feroSync.startSync();
+  // Start syncing (initial + feature)
+  feroSync.startSync();
 
   // Trigger manual background sync (optional)
   feroSync.syncAll();

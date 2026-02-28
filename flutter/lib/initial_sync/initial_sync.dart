@@ -10,11 +10,11 @@ import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:flutter/foundation.dart';
 
 /// Configuration for a feature's initial sync behavior.
-class FeatureInitialSyncConfig {
+class InitialSyncConfig {
   final InitialSyncHandler handler;
   final int priority; // Higher = syncs first (optional)
 
-  const FeatureInitialSyncConfig({
+  const InitialSyncConfig({
     required this.handler,
     this.priority = 0,
   });
@@ -24,7 +24,7 @@ class FeatureInitialSyncConfig {
 /// Listens to [InitialSyncRequiredEvent] from Fero server and orchestrates sync.
 /// Automatically handles log storage and conflict tracking.
 class InitialSyncManager implements InitialSyncService {
-  final Map<String, FeatureInitialSyncConfig> _featureConfigs;
+  final Map<String, InitialSyncConfig> _featureConfigs;
   final SyncExecutor _executor;
   final int batchSize;
   final int maxBatchSize;
@@ -38,7 +38,7 @@ class InitialSyncManager implements InitialSyncService {
       ValueNotifier(InitialSyncStatus.notStarted);
 
   InitialSyncManager({
-    required Map<String, FeatureInitialSyncConfig> featureConfigs,
+    required Map<String, InitialSyncConfig> featureConfigs,
     RetryPolicy? retryPolicy,
     int maxRetries = 5,
     required this.batchSize,

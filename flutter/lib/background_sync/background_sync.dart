@@ -20,7 +20,7 @@ import 'package:fero_sync/core/models/syncable.dart';
 /// - Liskov Substitution: Works with any BackgroundSyncHandler implementation
 /// - Interface Segregation: Depends only on specific interfaces it needs
 /// - Dependency Inversion: Depends on abstractions (interfaces), not concrete classes
-class BackgroundSyncManager {
+class FeatureSyncManager {
   final Map<String, FeatureSyncConfig> _featureConfigs;
   final SyncMetaDataRepo metaRepo;
   final SyncExecutor _executor;
@@ -37,7 +37,7 @@ class BackgroundSyncManager {
       {}; // Features that completed in this cycle
   final int _maxConcurrent;
 
-  BackgroundSyncManager({
+  FeatureSyncManager({
     required Map<String, FeatureSyncConfig> featureConfigs,
     required this.metaRepo,
     BackoffStrategy? backoffStrategy,

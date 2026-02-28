@@ -1,224 +1,253 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:math';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/status.dart' as status;
-import 'package:fero_sync/socket/message-dto.dart';
+// import 'dart:async';
+// import 'dart:convert';
+// import 'dart:math';
+// import 'package:connectivity_plus/connectivity_plus.dart';
+// import 'package:flutter/widgets.dart';
+// import 'package:web_socket_channel/web_socket_channel.dart';
+// import 'package:web_socket_channel/status.dart' as status;
+// import 'package:fero_sync/socket/message-dto.dart';
 
-typedef OnMessageReceived = void Function(MessageDto message);
-typedef OnConnectionFailed = void Function(int retries);
+// typedef OnMessageReceived = void Function(MessageDto message);
+// typedef OnConnectionFailed = void Function(int retries);
 
-enum SocketConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  reconnecting,
-}
+// enum SocketConnectionState {
+//   disconnected,
+//   connecting,
+//   connected,
+//   reconnecting,
+// }
 
-class FeroSocketService {
-  FeroSocketService._internal() {
-    debugPrint('[FeroSocket] Initialized');
-  }
+// class FeroSocketService with WidgetsBindingObserver {
+//   FeroSocketService._internal() {
+//     WidgetsBinding.instance.addObserver(this);
+//     debugPrint('[FeroSocket] Initialized');
+//   }
 
-  static final FeroSocketService _instance = FeroSocketService._internal();
-  factory FeroSocketService() => _instance;
+//   static final FeroSocketService _instance = FeroSocketService._internal();
+//   factory FeroSocketService() => _instance;
 
-  WebSocketChannel? _channel;
-  OnMessageReceived? onMessageReceived;
-  OnConnectionFailed? onConnectionFailed; // Callback for failed connection
+//   WebSocketChannel? _channel;
+//   OnMessageReceived? onMessageReceived;
+//   OnConnectionFailed? onConnectionFailed;
 
-  final String _serviceParam = 'fero';
-  String? _host;
-  int? _port;
-  bool _useHttps = false;
-  bool _manuallyDisconnected = false;
-  final List<MessageDto> _pendingMessages = [];
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
-  SocketConnectionState _state = SocketConnectionState.disconnected;
-  SocketConnectionState get state => _state;
+//   final String _serviceParam = 'fero';
+//   String? _host;
+//   int? _port;
+//   bool _useHttps = false;
 
-  int _retryCount = 0;
-  final Random _random = Random();
-  bool _isConnecting = false;
-  final int _maxRetries = 10;
+//   bool _manuallyDisconnected = false;
+//   bool _appInForeground = true;
+//   final List<MessageDto> _pendingMessages = [];
+//   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
-  void _setState(SocketConnectionState newState) {
-    debugPrint('[FeroSocket] State: $_state → $newState');
-    _state = newState;
-  }
+//   SocketConnectionState _state = SocketConnectionState.disconnected;
+//   SocketConnectionState get state => _state;
 
-  Future<void> connect({
-    required String host,
-    int? port,
-    bool useHttps = false,
-  }) async {
-    _host = host;
-    _port = port;
-    _useHttps = useHttps;
-    _manuallyDisconnected = false;
-    _retryCount = 0;
+//   int _retryCount = 0;
+//   final Random _random = Random();
+//   bool _isConnecting = false;
+//   final int _maxRetries = 10;
 
-    _listenToConnectivity();
-  }
+//   // Lazy connect trigger
+//   bool _connectCalled = false;
+//   void _setState(SocketConnectionState newState) {
+//     debugPrint('[FeroSocket] State: $_state → $newState');
+//     _state = newState;
+//   }
 
-  void disconnect() {
-    _manuallyDisconnected = true;
-    _connectivitySub?.cancel();
-    _connectivitySub = null;
-    _channel?.sink.close(status.normalClosure);
-    _channel = null;
-    _setState(SocketConnectionState.disconnected);
-    debugPrint('[FeroSocket] Disconnected manually');
-  }
+//   /// Call this when config ready and you want to connect
+//   Future<void> connect({
+//     required String host,
+//     int? port,
+//     bool useHttps = false,
+//   }) async {
+//     if (_connectCalled) return; // prevent multiple calls
+//     _connectCalled = true;
 
-  void sendMessage(MessageDto message) {
-    if (_state != SocketConnectionState.connected || _channel == null) {
-      _pendingMessages.add(message);
-      debugPrint(
-          '[FeroSocket] Queued message. Pending: ${_pendingMessages.length}');
-      return;
-    }
-    try {
-      _channel!.sink.add(jsonEncode(message.toJson()));
-      debugPrint('[FeroSocket] Sent: ${message.text}');
-    } catch (e) {
-      _pendingMessages.add(message);
-      debugPrint('[FeroSocket] Failed send, queued: $e');
-    }
-  }
+//     _host = host;
+//     _port = port;
+//     _useHttps = useHttps;
+//     _manuallyDisconnected = false;
+//     _retryCount = 0;
 
-  Future<void> _connectOnce() async {
-    if (_host == null || _manuallyDisconnected || _isConnecting) return;
+//     _listenToConnectivity();
+//   }
 
-    _isConnecting = true;
-    _setState(SocketConnectionState.connecting);
+//   void disconnect() {
+//     _manuallyDisconnected = true;
+//     _connectivitySub?.cancel();
+//     _connectivitySub = null;
+//     _channel?.sink.close(status.normalClosure);
+//     _channel = null;
+//     _setState(SocketConnectionState.disconnected);
+//     debugPrint('[FeroSocket] Disconnected manually');
+//   }
 
-    final scheme = _useHttps ? 'wss' : 'ws';
-    final portPart = _port != null ? ':$_port' : '';
-    final uri = Uri.parse('$scheme://$_host$portPart?service=$_serviceParam');
+//   void sendMessage(MessageDto message) {
+//     if (_state != SocketConnectionState.connected || _channel == null) {
+//       _pendingMessages.add(message);
+//       debugPrint(
+//           '[FeroSocket] Queued message. Pending: ${_pendingMessages.length}');
+//       return;
+//     }
+//     try {
+//       _channel!.sink.add(jsonEncode(message.toJson()));
+//       debugPrint('[FeroSocket] Sent: ${message.text}');
+//     } catch (e) {
+//       _pendingMessages.add(message);
+//       debugPrint('[FeroSocket] Failed send, queued: $e');
+//     }
+//   }
 
-    _channel?.sink.close();
+//   Future<void> _connectOnce() async {
+//     if (_host == null ||
+//         _manuallyDisconnected ||
+//         !_appInForeground ||
+//         _isConnecting) {
+//       return;
+//     }
 
-    try {
-      debugPrint('[FeroSocket] Attempting connection to $uri');
-      _channel = WebSocketChannel.connect(uri);
-      _channel?.ready.then((_) {
-        debugPrint('[FeroSocket] Connection established');
-        _retryCount = 0;
-        if (_state != SocketConnectionState.connected) {
-          _setState(SocketConnectionState.connected);
-          _flushPendingMessages();
-        }
-      });
-      _channel!.stream.listen(
-        _onMessage,
-        onDone: _onDisconnected,
-        onError: _onError,
-        cancelOnError: true,
-      );
-    } catch (e) {
-      debugPrint('[FeroSocket] Connection failed: $e');
-      _reconnect();
-    } finally {
-      _isConnecting = false;
-    }
-  }
+//     _isConnecting = true;
+//     _setState(SocketConnectionState.connecting);
 
-  void _onMessage(dynamic message) {
-    try {
-      final decoded = jsonDecode(message);
-      // Handle validation error from server
-      if (decoded['error'] != null &&
-          decoded['error']['code'] == 'VALIDATION_FAILED') {
-        final fields = decoded['error']['details']['fields'] as List<dynamic>?;
+//     final scheme = _useHttps ? 'wss' : 'ws';
+//     final portPart = _port != null ? ':$_port' : '';
+//     final uri = Uri.parse('$scheme://$_host$portPart?service=$_serviceParam');
 
-        final serviceField = fields?.firstWhere((f) => f['field'] == 'service',
-            orElse: () => null);
+//     _channel?.sink.close();
 
-        if (serviceField != null) {
-          debugPrint(
-              '[FeroSocket] Invalid service parameter, stopping retries.');
-          _manuallyDisconnected = true;
-          onConnectionFailed?.call(_retryCount);
-          _setState(SocketConnectionState.disconnected);
-          return;
-        }
-      }
-      final dto = MessageDto(
-        text: decoded['text'] ?? '',
-        userId: decoded['userId'] ?? 'server',
-      );
-      onMessageReceived?.call(dto);
-      debugPrint('[FeroSocket] Received: ${dto.text}');
-    } catch (_) {
-      debugPrint('[FeroSocket] Raw: $message');
-    }
-  }
+//     try {
+//       debugPrint('[FeroSocket] Attempting connection to $uri');
+//       _channel = WebSocketChannel.connect(uri);
+//       _channel?.ready.then((_) {
+//         debugPrint('[FeroSocket] Connection established');
+//         _retryCount = 0;
+//         if (_state != SocketConnectionState.connected) {
+//           _setState(SocketConnectionState.connected);
+//           _flushPendingMessages();
+//         }
+//       });
 
-  void _onError(Object e) {
-    if (_manuallyDisconnected) return;
-    debugPrint('[FeroSocket] Error: $e');
-    _reconnect();
-  }
+//       _channel!.stream.listen(
+//         _onMessage,
+//         onDone: _onDisconnected,
+//         onError: _onError,
+//         cancelOnError: true,
+//       );
+//     } catch (e) {
+//       debugPrint('[FeroSocket] Connection failed: $e');
+//       _reconnect();
+//     } finally {
+//       _isConnecting = false;
+//     }
+//   }
 
-  void _onDisconnected() {
-    if (_manuallyDisconnected) return;
-    debugPrint('[FeroSocket] Server closed connection');
-    _reconnect();
-  }
+//   void _onMessage(dynamic message) {
+//     try {
+//       final decoded = jsonDecode(message);
 
-  void _flushPendingMessages() {
-    if (_channel == null) return;
-    for (final msg in _pendingMessages) {
-      try {
-        _channel!.sink.add(jsonEncode(msg.toJson()));
-      } catch (_) {
-        break;
-      }
-    }
-    _pendingMessages.clear();
-  }
+//       if (decoded['error'] != null &&
+//           decoded['error']['code'] == 'VALIDATION_FAILED') {
+//         final fields = decoded['error']['details']['fields'] as List<dynamic>?;
+//         final serviceField = fields?.firstWhere((f) => f['field'] == 'service',
+//             orElse: () => null);
 
-  void _listenToConnectivity() {
-    _connectivitySub?.cancel();
-    _connectivitySub = Connectivity()
-        .onConnectivityChanged
-        .listen((List<ConnectivityResult> results) async {
-      final isOnline = results.contains(ConnectivityResult.wifi) ||
-          results.contains(ConnectivityResult.mobile) ||
-          results.contains(ConnectivityResult.ethernet);
-      debugPrint('[FeroSocket] Connectivity changed. Online: $isOnline');
-      if (isOnline &&
-          !_manuallyDisconnected &&
-          _state != SocketConnectionState.connected) {
-        _connectOnce();
-      }
-    });
-  }
+//         if (serviceField != null) {
+//           debugPrint(
+//               '[FeroSocket] Invalid service parameter, stopping retries.');
+//           _manuallyDisconnected = true;
+//           onConnectionFailed?.call(_retryCount);
+//           _setState(SocketConnectionState.disconnected);
+//           return;
+//         }
+//       }
 
-  void _reconnect() {
-    if (_manuallyDisconnected) return;
+//       final dto = MessageDto(
+//         text: decoded['text'] ?? '',
+//         userId: decoded['userId'] ?? 'server',
+//       );
+//       onMessageReceived?.call(dto);
+//       debugPrint('[FeroSocket] Received: ${dto.text}');
+//     } catch (_) {
+//       debugPrint('[FeroSocket] Raw: $message');
+//     }
+//   }
 
-    _retryCount++;
-    if (_retryCount > _maxRetries) {
-      debugPrint('[FeroSocket] Max retries reached. Connection failed.');
-      onConnectionFailed?.call(_retryCount); // Trigger callback
-      _setState(SocketConnectionState.disconnected);
-      return;
-    }
+//   void _onError(Object e) {
+//     if (_manuallyDisconnected) return;
+//     debugPrint('[FeroSocket] Error: $e');
+//     _reconnect();
+//   }
 
-    final baseDelay = min(30, 2 * _retryCount); // capped delay at 30s
-    final jitter = _random.nextInt(3); // 0-2s random jitter
-    final delay = Duration(seconds: baseDelay + jitter);
+//   void _onDisconnected() {
+//     if (_manuallyDisconnected) return;
+//     _setState(SocketConnectionState.disconnected);
+//     debugPrint('[FeroSocket] Server closed connection');
+//     _reconnect();
+//   }
 
-    debugPrint(
-        '[FeroSocket] Reconnecting in ${delay.inSeconds}s... Retry $_retryCount');
-    _setState(SocketConnectionState.reconnecting);
+//   void _flushPendingMessages() {
+//     if (_channel == null) return;
+//     for (final msg in _pendingMessages) {
+//       try {
+//         _channel!.sink.add(jsonEncode(msg.toJson()));
+//       } catch (_) {
+//         break;
+//       }
+//     }
+//     _pendingMessages.clear();
+//   }
 
-    Future.delayed(delay, () {
-      if (!_manuallyDisconnected) _connectOnce();
-    });
-  }
-}
+//   void _listenToConnectivity() {
+//     _connectivitySub?.cancel();
+//     _connectivitySub = Connectivity()
+//         .onConnectivityChanged
+//         .listen((List<ConnectivityResult> results) async {
+//       final isOnline = results.contains(ConnectivityResult.wifi) ||
+//           results.contains(ConnectivityResult.mobile) ||
+//           results.contains(ConnectivityResult.ethernet);
+//       debugPrint('[FeroSocket] Connectivity changed. Online: $isOnline');
+//       if (isOnline &&
+//           !_manuallyDisconnected &&
+//           _state != SocketConnectionState.connected &&
+//           _appInForeground) {
+//         _connectOnce();
+//       }
+//     });
+//   }
+
+//   void _reconnect() {
+//     if (_manuallyDisconnected) return;
+
+//     _retryCount++;
+//     if (_retryCount > _maxRetries) {
+//       debugPrint('[FeroSocket] Max retries reached. Connection failed.');
+//       onConnectionFailed?.call(_retryCount);
+//       _setState(SocketConnectionState.disconnected);
+//       return;
+//     }
+
+//     final baseDelay =
+//         min(30, pow(2, _retryCount).toInt()); // exponential backoff
+//     final jitter = _random.nextInt(3);
+//     final delay = Duration(seconds: baseDelay + jitter);
+
+//     debugPrint(
+//         '[FeroSocket] Reconnecting in ${delay.inSeconds}s... Retry $_retryCount');
+//     _setState(SocketConnectionState.reconnecting);
+
+//     Future.delayed(delay, () {
+//       if (!_manuallyDisconnected) _connectOnce();
+//     });
+//   }
+
+//   @override
+//   void didChangeAppLifecycleState(AppLifecycleState state) {
+//     _appInForeground = state == AppLifecycleState.resumed;
+//     if (_appInForeground &&
+//         _state != SocketConnectionState.connected &&
+//         !_manuallyDisconnected) {
+//       _connectOnce();
+//     }
+//   }
+// }

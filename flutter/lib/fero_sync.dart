@@ -23,16 +23,16 @@ class FeroSync {
   final InitialSyncManager _initialManager;
 
   /// Manager for performing background/incremental sync
-  final BackgroundSyncManager? _backgroundManager;
+  final FeatureSyncManager? _featureManager;
 
   /// Repository for storing sync metadata (e.g. last cursors)
   final SyncMetaDataRepo metadataRepo;
 
   /// Map of feature keys to their respective configs
-  final Map<String, FeatureInitialSyncConfig> initialSyncConfigs;
+  final Map<String, InitialSyncConfig> initialSyncConfigs;
 
-  /// Map of feature keys to their background sync configs
-  final Map<String, FeatureSyncConfig>? backgroundSyncConfigs;
+  /// Map of feature keys to their feature sync configs
+  final Map<String, FeatureSyncConfig>? featureSyncConfigs;
 
   /// Strategy to handle retries/backoff for failed sync attempts
   final RetryPolicy retryPolicy;
@@ -50,8 +50,8 @@ class FeroSync {
       _initialManager.statusNotifier;
 
   /// Stream to observe background sync events
-  ValueNotifier<SyncProcessStatus>? backgroundSyncNotifier(String featureKey) {
-    return _backgroundManager?.getFeatureStatus(featureKey).statusNotifier;
+  ValueNotifier<SyncProcessStatus>? featureSyncNotifier(String featureKey) {
+    return _featureManager?.getFeatureStatus(featureKey).statusNotifier;
   }
 
   /// Optional subscription to listen to events internally
@@ -61,23 +61,23 @@ class FeroSync {
   /// Private constructor to enforce usage of the async factory `create`
   FeroSync._({
     required this.initialSyncConfigs,
-    required this.backgroundSyncConfigs,
+    required this.featureSyncConfigs,
     required this.retryPolicy,
     required this.conflictStrategy,
     required this.batchSize,
     required this.maxBatchSize,
     required this.metadataRepo,
     required InitialSyncManager initialManager,
-    BackgroundSyncManager? backgroundManager,
+    FeatureSyncManager? featureManager,
   })  : _initialManager = initialManager,
-        _backgroundManager = backgroundManager;
+        _featureManager = featureManager;
 
   /// Factory method to create an instance of FeroSync asynchronously
   /// Sets default backoff and conflict resolution strategies if none are provided
   /// Automatically starts background sync after initial sync completes
   static Future<FeroSync> create({
-    required Map<String, FeatureInitialSyncConfig> initialSyncConfigs,
-    Map<String, FeatureSyncConfig>? backgroundSyncConfigs,
+    required Map<String, InitialSyncConfig> initialSyncConfigs,
+    Map<String, FeatureSyncConfig>? featureSyncConfigs,
     required SyncMetaDataRepo metadataRepo,
     RetryPolicy? retryPolicy,
     int? batchSize,
@@ -103,11 +103,11 @@ class FeroSync {
       metaRepo: metadataRepo,
     );
 
-    // Create BackgroundSyncManager if configs are provided
-    BackgroundSyncManager? bgManager;
-    if (backgroundSyncConfigs != null) {
-      bgManager = BackgroundSyncManager(
-        featureConfigs: backgroundSyncConfigs,
+    // Create FeatureSyncManager if configs are provided
+    FeatureSyncManager? featureManager;
+    if (featureSyncConfigs != null) {
+      featureManager = FeatureSyncManager(
+        featureConfigs: featureSyncConfigs,
         metaRepo: metadataRepo,
         maxConcurrent: maxConcurrent ?? 2,
         batchSize: bs,
@@ -116,33 +116,33 @@ class FeroSync {
 
     final instance = FeroSync._(
       initialSyncConfigs: initialSyncConfigs,
-      backgroundSyncConfigs: backgroundSyncConfigs,
+      featureSyncConfigs: featureSyncConfigs,
       retryPolicy: retryPolicyValue,
       conflictStrategy: strategy,
       batchSize: bs,
       maxBatchSize: mbs,
       metadataRepo: metadataRepo,
       initialManager: initManager,
-      backgroundManager: bgManager,
+      featureManager: featureManager,
     );
 
-    // Auto-start background sync when initial sync completes (set up once)
-    if (bgManager != null) {
-      instance._setupAutoBackgroundSync();
+    // Auto-start feature sync when initial sync completes (set up once)
+    if (featureManager != null) {
+      instance._setupAutoFeatureSync();
     }
 
     return instance;
   }
 
-  /// Setup automatic background sync trigger after initial sync completes
-  void _setupAutoBackgroundSync() {
+  /// Setup automatic feature sync trigger after initial sync completes
+  void _setupAutoFeatureSync() {
     // Only set up listener once to avoid multiple triggers
     if (_autoBackgroundSyncSetup) return;
 
     _autoBackgroundSyncSetup = true;
     _statusListener = () {
       if (_initialManager.statusNotifier.value == InitialSyncStatus.completed) {
-        _backgroundManager?.syncAll();
+        _featureManager?.syncAll();
       }
     };
 
@@ -154,9 +154,9 @@ class FeroSync {
     await _initialManager.run();
   }
 
-  /// Manually trigger background sync for all features
+  /// Manually trigger feature sync for all features
   void syncAll() {
-    _backgroundManager?.syncAll();
+    _featureManager?.syncAll();
   }
 
   /// Cancel ongoing operations safely
@@ -172,6 +172,6 @@ class FeroSync {
     }
 
     _initialManager.dispose();
-    _backgroundManager?.dispose();
+    _featureManager?.dispose();
   }
 }
