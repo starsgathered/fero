@@ -245,10 +245,12 @@ class ContactSyncHandler extends FeatureSyncHandler {
   ];
 
   @override
-  Future<List<SyncPayload<LocalItem>>> getLocallyModified() async => _contacts
-      .where((c) => c.locallyModified)
-      .map((c) => SyncPayload<LocalItem>(data: c))
-      .toList();
+  Future<List<SyncPayload<LocalItem>>> getLocallyModifiedByIds(
+          {required List<String> ids}) async =>
+      _contacts
+          .where((c) => c.locallyModified && ids.contains(c.id))
+          .map((c) => SyncPayload<LocalItem>(data: c))
+          .toList();
 
   @override
   Future<SyncBatchResult> fetchRemoteChanges(
@@ -305,10 +307,12 @@ class MessageSyncHandler extends FeatureSyncHandler {
   ];
 
   @override
-  Future<List<SyncPayload<LocalItem>>> getLocallyModified() async => _messages
-      .where((m) => m.locallyModified)
-      .map((m) => SyncPayload<LocalItem>(data: m))
-      .toList();
+  Future<List<SyncPayload<LocalItem>>> getLocallyModifiedByIds(
+          {required List<String> ids}) async =>
+      _messages
+          .where((m) => m.locallyModified && ids.contains(m.id))
+          .map((m) => SyncPayload<LocalItem>(data: m))
+          .toList();
 
   @override
   Future<SyncBatchResult> fetchRemoteChanges(

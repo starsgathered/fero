@@ -184,19 +184,16 @@ class FeatureSyncManager {
           final itemsToApply = <SyncPayload<ServerItem>>[];
 
           for (final remoteItem in items) {
-            final localItems = await handler.getLocallyModified();
-            // Match by business id, not syncId (local items may not have syncId yet)
-            final localMatch = localItems
-                .where((l) => l.data.id == remoteItem.data.id)
-                .toList();
+            final localItems = await handler.getLocallyModifiedByIds(
+                ids: items.map((e) => e.data.id).toList());
 
-            if (localMatch.isEmpty) {
+            if (localItems.isEmpty) {
               // No local conflict, apply remote item
               itemsToApply.add(remoteItem);
             } else {
               // Conflict exists, resolve it
               final resolution = ConflictResolver.resolve(
-                local: localMatch.first.data,
+                local: localItems.first.data,
                 remote: remoteItem.data,
                 strategy: conflictStrategy,
               );
@@ -224,9 +221,6 @@ class FeatureSyncManager {
       _completedSync.add(featureKey);
     } catch (e) {
       featureStatus.fail(e.toString());
-      // Mark as completed even on failure to unblock dependent features
-      // Caller should handle retry logic based on events
-      _completedSync.add(featureKey);
     } finally {
       _runningSync.remove(featureKey);
       _activeSync--;

@@ -27,7 +27,8 @@ import 'package:fero_sync/core/models/sync_checkpoint.dart';
 abstract class FeatureSyncHandler {
   /// Fetch locally modified items that need to be synced
   /// Returns items that have changed locally and need to be pushed to server
-  Future<List<SyncPayload<LocalItem>>> getLocallyModified();
+  Future<List<SyncPayload<LocalItem>>> getLocallyModifiedByIds(
+      {required List<String> ids});
 
   /// Fetch remote changes for sync with checkpoint-based pagination
   ///
