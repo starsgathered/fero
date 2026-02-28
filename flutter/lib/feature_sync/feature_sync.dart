@@ -14,10 +14,10 @@ import 'package:fero_sync/core/models/syncable.dart';
 /// Incremental sync manager for background/continuous syncing.
 /// Handles priority-based, dependency-aware, and concurrent sync operations.
 ///
-/// Follows SOLID principles:
-/// - Single Responsibility: Orchestrates background sync workflows
+/// Follows:
+/// - Single Responsibility: Orchestrates feature sync workflows
 /// - Open/Closed: Extensible via FeatureSyncConfig without modification
-/// - Liskov Substitution: Works with any BackgroundSyncHandler implementation
+/// - Liskov Substitution: Works with any FeatureSyncHandler implementation
 /// - Interface Segregation: Depends only on specific interfaces it needs
 /// - Dependency Inversion: Depends on abstractions (interfaces), not concrete classes
 class FeatureSyncManager {
