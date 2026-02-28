@@ -57,7 +57,7 @@ await feroSync.startSync();
 
 ## Example
 
-See [example/lib/main.dart](example/lib/main.dart) for a working demo with:
+See [example/lib/main.dart](https://pub.dev/packages/fero_sync/example) for a working demo with:
 
 * User Preferences (initial sync)
 * Contacts (background sync)
@@ -77,15 +77,16 @@ feroSync.dispose(); // Clean resources
 ## Architecture
 
 ```
-Flutter App (UI)
-       │
-   FeroSync Orchestrator
-       │
- ┌─────┴─────┐
- │Initial Sync│ Feature Sync (incremental sync)
- └─────┬─────┘
-       │
-   Your Handlers (fetchRemoteData, applyRemoteChanges, pushLocalChanges)
+              Flutter App (UI)
+                    │
+            FeroSync Orchestrator
+                    │
+    ┌───────────────┴─────────────────────────────┐
+    │Initial Sync / Feature Sync(incremental sync)|
+    └───────────────┬─────────────────────────────┘
+                    │
+            Your Handlers (fetchRemoteData,
+            applyRemoteChanges, pushLocalChanges)
 ```
 
 * Pure Dart, no UI or platform dependencies
