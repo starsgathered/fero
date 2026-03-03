@@ -197,36 +197,43 @@ class FeatureSyncManager {
           // Apply conflict resolution before applying to local
           final itemsToApply = <SyncPayload<ServerItem>>[];
 
+          final localItems = await handler.getLocallyModifiedByIds(
+              ids: items.map((e) => e.data.id).toList());
+
+          // Build O(1) lookup map — scalable for large batches
+          final Map<String, SyncPayload<LocalItem>> localMap = {
+            for (final item in localItems) item.data.id: item,
+          };
+
           for (final remoteItem in items) {
-            final localItems = await handler.getLocallyModifiedByIds(
-                ids: items.map((e) => e.data.id).toList());
+            final localMatch = localMap[remoteItem.data.id];
 
-            if (localItems.isEmpty) {
-              // No local conflict, apply remote item
+            if (localMatch == null) {
+              // No conflict
               itemsToApply.add(remoteItem);
-            } else {
-              // Conflict exists, resolve it
-              final resolution = ConflictResolver.resolve(
-                local: localItems.first.data,
-                remote: remoteItem.data,
-                strategy: conflictStrategy,
-              );
+              continue;
+            }
 
-              if (resolution.applyRemote) {
-                itemsToApply.add(remoteItem);
-              }
+            final resolution = ConflictResolver.resolve(
+              local: localMatch.data,
+              remote: remoteItem.data,
+              strategy: conflictStrategy,
+            );
+
+            if (resolution.applyRemote) {
+              itemsToApply.add(remoteItem);
             }
           }
 
-          if (itemsToApply.isNotEmpty) {
-            return await handler.applyRemoteChanges(itemsToApply);
+          if (itemsToApply.isEmpty) {
+            return ApplyResult.success();
           }
 
-          return ApplyResult.success();
+          return await handler.applyRemoteChanges(itemsToApply);
         },
         featureKey: featureKey,
-        onBatchComplete: (checkpoint) {
-          metaRepo.updateBackgroundSyncCheckpoint(featureKey, checkpoint);
+        onBatchComplete: (checkpoint) async {
+          await metaRepo.updateBackgroundSyncCheckpoint(featureKey, checkpoint);
         },
         initialCheckpoint: initialCheckpoint,
       );
