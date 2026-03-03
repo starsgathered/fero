@@ -1,48 +1,44 @@
-/// --- SyncCheckpoint ---
-/// Represents the sync state checkpoint for pagination using an opaque cursor.
-///
-/// The cursor is an opaque string token (for example a syncId encoded as
-/// string) provided by the server to resume pagination. Keeping it as a
-/// string makes the checkpoint flexible and transport-agnostic.
+import 'dart:convert';
+
 class SyncCheckpoint {
-  /// Opaque cursor token used to fetch the next page.
-  final String cursor;
+  final BigInt lastSyncedId;
+  final String lastSyncedAt;
 
   const SyncCheckpoint({
-    required this.cursor,
+    required this.lastSyncedId,
+    required this.lastSyncedAt,
   });
 
-  /// Create checkpoint from a syncable item's syncId.
-  factory SyncCheckpoint.fromSyncable(String cursor) {
-    return SyncCheckpoint(
-      cursor: cursor,
-    );
-  }
-
-  /// Serialize to map for storage
-  Map<String, dynamic> toJson() {
-    return {
-      'cursor': cursor,
+  /// Encode checkpoint to opaque cursor string
+  String encode() {
+    final jsonMap = {
+      'lastSyncedId': lastSyncedId.toString(),
+      'lastSyncedAt': lastSyncedAt,
     };
+    return base64Encode(utf8.encode(jsonEncode(jsonMap)));
   }
 
-  /// Deserialize from stored map
-  factory SyncCheckpoint.fromJson(Map<String, dynamic> json) {
+  /// Decode from cursor string
+  factory SyncCheckpoint.fromCursor(String cursor) {
+    final decoded = utf8.decode(base64Decode(cursor));
+    final map = jsonDecode(decoded) as Map<String, dynamic>;
     return SyncCheckpoint(
-      cursor: json['cursor'] as String,
+      lastSyncedId: BigInt.parse(map['lastSyncedId'] as String),
+      lastSyncedAt: map['lastSyncedAt'] as String,
     );
   }
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SyncCheckpoint &&
-          runtimeType == other.runtimeType &&
-          cursor == other.cursor;
+  Map<String, dynamic> toJson() => {
+        'lastSyncedId': lastSyncedId.toString(),
+        'lastSyncedAt': lastSyncedAt,
+      };
+
+  factory SyncCheckpoint.fromJson(Map<String, dynamic> json) => SyncCheckpoint(
+        lastSyncedId: BigInt.parse(json['lastSyncedId'] as String),
+        lastSyncedAt: json['lastSyncedAt'] as String,
+      );
 
   @override
-  int get hashCode => cursor.hashCode;
-
-  @override
-  String toString() => 'SyncCheckpoint(cursor: $cursor)';
+  String toString() =>
+      'SyncCheckpoint(lastSyncedId: $lastSyncedId, lastSyncedAt: $lastSyncedAt)';
 }

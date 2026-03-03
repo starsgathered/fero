@@ -112,7 +112,7 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
         syncId: BigInt.from(1),
         text: "Welcome 👋",
         version: 1,
-        updatedAt: DateTime.now(),
+        updatedAt: DateTime.parse("2024-01-01T00:00:00Z"),
       ),
     ];
 
@@ -120,7 +120,10 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
       items: serverMessages
           .map((msg) => SyncPayload<ServerItem>(data: msg))
           .toList(),
-      checkpoint: SyncCheckpoint.fromSyncable("1"), // 1 is last item syncId
+      checkpoint: SyncCheckpoint(
+        lastSyncedId: BigInt.from(1),
+        lastSyncedAt: DateTime.parse("2024-01-01T00:00:00Z").toIso8601String(),
+      ), // 1 is last item syncId
     );
   }
 
@@ -193,13 +196,16 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
         syncId: BigInt.from(2),
         text: "Hello from server!",
         version: 1,
-        updatedAt: DateTime.now(),
+        updatedAt: DateTime.parse("2024-01-01T00:00:00Z"),
       ),
     ];
 
     return SyncBatchResult.success(
       items: newMessages.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
-      checkpoint: SyncCheckpoint.fromSyncable("2"), // 2 is last item syncId
+      checkpoint: SyncCheckpoint(
+        lastSyncedId: BigInt.from(2),
+        lastSyncedAt: DateTime.parse("2024-01-01T00:00:00Z").toIso8601String(),
+      ), // 2 is last item syncId
     );
   }
 
