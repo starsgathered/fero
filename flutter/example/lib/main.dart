@@ -12,13 +12,13 @@ import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 
 /// ------------------
-/// Example
+/// Entry Point
 /// ------------------
 Future<void> main() async {
-  // 1️⃣ Create a local database (in-memory list)
+  // 1️⃣ Local in-memory "database"
   final localDb = <LocalMessage>[];
 
-  // 2️⃣ Initialize FeroSync
+  // 2️⃣ Initialize FeroSync with initial + background sync configs
   final feroSync = await FeroSync.create(
     metadataRepo: InMemorySyncMetaDataRepo(),
     initialSyncConfigs: {
@@ -33,20 +33,20 @@ Future<void> main() async {
     },
   );
 
-  // 3️⃣ Listen for initial sync updates
+  // 3️⃣ Listen for initial sync status
   feroSync.initialSyncNotifier.addListener(() {
     print("📊 Initial Sync Status: ${feroSync.initialSyncNotifier.value}");
   });
 
-  // 4️⃣ Listen for background/incremental sync updates
+  // 4️⃣ Listen for background sync updates
   feroSync.featureSyncNotifier("messages")?.addListener(() {
     print("📡 Background Sync Running...");
   });
 
-  // 5️⃣ Start initial + background syncing
+  // 5️⃣ Start syncing
   await feroSync.startSync();
 
-  // 6️⃣ Example: User adds a message
+  // 6️⃣ Example: Add a message from UI
   addMessageFromUI("Hello, world!", localDb, feroSync);
 }
 
@@ -122,8 +122,8 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
           .toList(),
       checkpoint: SyncCheckpoint(
         lastSyncedId: BigInt.from(1),
-        lastSyncedAt: DateTime.parse("2024-01-01T00:00:00Z").toIso8601String(),
-      ), // 1 is last item syncId
+        lastSyncedAt: "2024-01-01T00:00:00Z",
+      ), // last synced message info for next incremental fetches
     );
   }
 
@@ -152,7 +152,6 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
 
   MessageFeatureSyncHandler(this._localDb);
 
-  // 1️⃣ Get locally modified messages
   @override
   Future<List<SyncPayload<LocalItem>>> getLocallyModified(
       {int batchSize = 50}) async {
@@ -165,7 +164,6 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
     return modified;
   }
 
-  // 2️⃣ Push local changes to server
   @override
   Future<ApplyResult> pushLocalChanges(
       [List<SyncPayload<LocalItem>>? localStates]) async {
@@ -185,7 +183,6 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
     return ApplyResult.success();
   }
 
-  // 3️⃣ Fetch remote changes
   @override
   Future<SyncBatchResult> fetchRemoteChanges(
       {checkpoint, required int batchSize}) async {
@@ -204,12 +201,11 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
       items: newMessages.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
       checkpoint: SyncCheckpoint(
         lastSyncedId: BigInt.from(2),
-        lastSyncedAt: DateTime.parse("2024-01-01T00:00:00Z").toIso8601String(),
-      ), // 2 is last item syncId
+        lastSyncedAt: "2024-01-01T00:00:00Z",
+      ), // last synced message info for next incremental fetches
     );
   }
 
-  // 4️⃣ Apply remote changes locally
   @override
   Future<ApplyResult> applyRemoteChanges(
       List<SyncPayload<ServerItem>> remoteData) async {
