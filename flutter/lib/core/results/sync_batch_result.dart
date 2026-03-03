@@ -7,7 +7,7 @@ import 'package:fero_sync/core/models/sync_checkpoint.dart';
 /// Supports checkpoint-based pagination.
 ///
 /// Termination of pagination is signalled by the presence (or absence)
-/// of a checkpoint (cursor/afterId) returned by the server, or by an
+/// of a checkpoint (cursor) returned by the server, or by an
 /// empty `items` list. This follows cursor/next-id style APIs.
 class SyncBatchResult {
   /// True if the operation succeeded
@@ -16,8 +16,6 @@ class SyncBatchResult {
   /// List of items in this batch
   final List<SyncPayload<ServerItem>> items;
 
-  /// Checkpoint for the next page (typically last item's syncId).
-  /// Used for resumable pagination: WHERE syncId > checkpoint.afterId
   final SyncCheckpoint? checkpoint;
 
   /// Error message if the operation failed

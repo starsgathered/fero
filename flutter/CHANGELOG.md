@@ -45,3 +45,7 @@
 - Improved sync reliability and retry/backoff handling.
 - Updated example and documentation to reflect latest API changes.
 - Small performance optimizations and code cleanup.
+
+## 0.4.7 - 2026-03-03
+
+- changed syncId to cursor

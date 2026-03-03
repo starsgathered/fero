@@ -22,7 +22,7 @@
 
 ```yaml
 dependencies:
-  fero_sync: ^0.4.6
+  fero_sync: ^0.4.7
 ```
 
 ```dart

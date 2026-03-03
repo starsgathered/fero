@@ -1,40 +1,35 @@
 /// --- SyncCheckpoint ---
-/// Represents the sync state checkpoint for pagination.
+/// Represents the sync state checkpoint for pagination using an opaque cursor.
 ///
-/// Uses the monotonic syncId for deterministic ordering and resumable pagination.
-/// This approach ensures:
-/// 1. Consistent ordering using monotonically increasing IDs
-/// 2. Ability to resume from exact point after interruption
-/// 3. Simple and efficient pagination (WHERE syncId > afterId)
-///
-/// Immutable value object following clean architecture principles.
+/// The cursor is an opaque string token (for example a syncId encoded as
+/// string) provided by the server to resume pagination. Keeping it as a
+/// string makes the checkpoint flexible and transport-agnostic.
 class SyncCheckpoint {
-  /// Fetch items AFTER this ID. Query: WHERE syncId > afterId
-  /// Example: afterId=100 → fetch items 101, 102, 103...
-  final BigInt afterId;
+  /// Opaque cursor token used to fetch the next page.
+  final String cursor;
 
   const SyncCheckpoint({
-    required this.afterId,
+    required this.cursor,
   });
 
-  /// Create checkpoint from a syncable item
-  factory SyncCheckpoint.fromSyncable(BigInt syncId) {
+  /// Create checkpoint from a syncable item's syncId.
+  factory SyncCheckpoint.fromSyncable(String cursor) {
     return SyncCheckpoint(
-      afterId: syncId,
+      cursor: cursor,
     );
   }
 
   /// Serialize to map for storage
   Map<String, dynamic> toJson() {
     return {
-      'afterId': afterId.toString(),
+      'cursor': cursor,
     };
   }
 
   /// Deserialize from stored map
   factory SyncCheckpoint.fromJson(Map<String, dynamic> json) {
     return SyncCheckpoint(
-      afterId: BigInt.parse(json['afterId'] as String),
+      cursor: json['cursor'] as String,
     );
   }
 
@@ -43,11 +38,11 @@ class SyncCheckpoint {
       identical(this, other) ||
       other is SyncCheckpoint &&
           runtimeType == other.runtimeType &&
-          afterId == other.afterId;
+          cursor == other.cursor;
 
   @override
-  int get hashCode => afterId.hashCode;
+  int get hashCode => cursor.hashCode;
 
   @override
-  String toString() => 'SyncCheckpoint(afterId: $afterId)';
+  String toString() => 'SyncCheckpoint(cursor: $cursor)';
 }

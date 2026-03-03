@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'package:fero_sync/fero_sync.dart';
 import 'package:fero_sync/core/models/sync_checkpoint.dart';
 import 'package:fero_sync/core/models/sync_payload.dart';
 import 'package:fero_sync/core/models/syncable.dart';
@@ -8,18 +8,17 @@ import 'package:fero_sync/core/results/sync_batch_result.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:fero_sync/feature_sync/feature_sync_config.dart';
 import 'package:fero_sync/feature_sync/feature_sync_handler.dart';
-import 'package:fero_sync/fero_sync.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 
 /// ------------------
-/// Example: Beginner-friendly usage
+/// Example
 /// ------------------
 Future<void> main() async {
-  // Local database in memory
+  // 1️⃣ Create a local database (in-memory list)
   final localDb = <LocalMessage>[];
 
-  // Create FeroSync instance
+  // 2️⃣ Initialize FeroSync
   final feroSync = await FeroSync.create(
     metadataRepo: InMemorySyncMetaDataRepo(),
     initialSyncConfigs: {
@@ -34,25 +33,25 @@ Future<void> main() async {
     },
   );
 
-  // Listen for initial sync status updates
+  // 3️⃣ Listen for initial sync updates
   feroSync.initialSyncNotifier.addListener(() {
     print("📊 Initial Sync Status: ${feroSync.initialSyncNotifier.value}");
   });
 
-  // Listen for background/incremental sync
+  // 4️⃣ Listen for background/incremental sync updates
   feroSync.featureSyncNotifier("messages")?.addListener(() {
     print("📡 Background Sync Running...");
   });
 
-  // Start syncing (initial sync + automatic background sync)
+  // 5️⃣ Start initial + background syncing
   await feroSync.startSync();
 
-  // Example: User adds a new message in the UI
+  // 6️⃣ Example: User adds a message
   addMessageFromUI("Hello, world!", localDb, feroSync);
 }
 
 /// ------------------
-/// Local and Server models
+/// Local & Server Models
 /// ------------------
 class LocalMessage implements LocalItem {
   @override
@@ -96,6 +95,7 @@ class ServerMessage implements ServerItem {
 /// ------------------
 class MessageInitialSyncHandler extends InitialSyncHandler {
   final List<LocalMessage> _localDb;
+
   MessageInitialSyncHandler(this._localDb);
 
   @override
@@ -103,8 +103,9 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
     checkpoint,
     required int batchSize,
   }) async {
-    print("🌍 Fetching old messages from server...");
+    print("🌍 Fetching messages from server...");
 
+    // Simulated server messages
     final serverMessages = [
       ServerMessage(
         id: "m1",
@@ -116,17 +117,18 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
     ];
 
     return SyncBatchResult.success(
-      items:
-          serverMessages.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
-      checkpoint: SyncCheckpoint(afterId: BigInt.from(1)),
+      items: serverMessages
+          .map((msg) => SyncPayload<ServerItem>(data: msg))
+          .toList(),
+      checkpoint: SyncCheckpoint.fromSyncable("1"), // 1 is last item syncId
     );
   }
 
   @override
   Future<ApplyResult> saveToLocal(
       List<SyncPayload<ServerItem>> remoteData) async {
-    for (final item in remoteData) {
-      final server = item.data as ServerMessage;
+    for (final payload in remoteData) {
+      final server = payload.data as ServerMessage;
       _localDb.add(LocalMessage(
         id: server.id,
         text: server.text,
@@ -140,26 +142,27 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
 }
 
 /// ------------------
-/// Feature Sync Handler (incremental / background sync)
+/// Feature (Background) Sync Handler
 /// ------------------
 class MessageFeatureSyncHandler extends FeatureSyncHandler {
   final List<LocalMessage> _localDb;
+
   MessageFeatureSyncHandler(this._localDb);
 
-  /// 1️⃣ Get unsent/locally modified messages
+  // 1️⃣ Get locally modified messages
   @override
   Future<List<SyncPayload<LocalItem>>> getLocallyModified(
       {int batchSize = 50}) async {
-    final unsent = _localDb
+    final modified = _localDb
         .where((m) => m.locallyModified)
         .take(batchSize)
         .map((m) => SyncPayload<LocalItem>(data: m))
         .toList();
-    print("📤 Found ${unsent.length} unsent messages");
-    return unsent;
+    print("📤 Found ${modified.length} unsent messages");
+    return modified;
   }
 
-  /// 2️⃣ Push local messages to server
+  // 2️⃣ Push local changes to server
   @override
   Future<ApplyResult> pushLocalChanges(
       [List<SyncPayload<LocalItem>>? localStates]) async {
@@ -179,7 +182,7 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
     return ApplyResult.success();
   }
 
-  /// 3️⃣ Fetch new messages from server
+  // 3️⃣ Fetch remote changes
   @override
   Future<SyncBatchResult> fetchRemoteChanges(
       {checkpoint, required int batchSize}) async {
@@ -196,18 +199,17 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
 
     return SyncBatchResult.success(
       items: newMessages.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
-      checkpoint: SyncCheckpoint(afterId: BigInt.from(2)),
+      checkpoint: SyncCheckpoint.fromSyncable("2"), // 2 is last item syncId
     );
   }
 
-  /// 4️⃣ Apply remote messages locally
+  // 4️⃣ Apply remote changes locally
   @override
   Future<ApplyResult> applyRemoteChanges(
       List<SyncPayload<ServerItem>> remoteData) async {
     for (final payload in remoteData) {
       final server = payload.data as ServerMessage;
-      final exists = _localDb.any((m) => m.id == server.id);
-      if (!exists) {
+      if (!_localDb.any((m) => m.id == server.id)) {
         _localDb.add(LocalMessage(
           id: server.id,
           text: server.text,
@@ -231,7 +233,7 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
 }
 
 /// ------------------
-/// In-memory metadata repo
+/// In-Memory Metadata Repository
 /// ------------------
 class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
   final Map<String, SyncCheckpoint?> _initialCheckpoints = {};
@@ -252,13 +254,8 @@ class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
       _initialCompleted[featureKey] ?? false;
 
   @override
-  Future<bool> areAllInitialSyncsCompleted(List<String> featureKeys) async {
-    if (featureKeys.isEmpty) return true;
-    for (final key in featureKeys) {
-      if (!(_initialCompleted[key] ?? false)) return false;
-    }
-    return true;
-  }
+  Future<bool> areAllInitialSyncsCompleted(List<String> featureKeys) async =>
+      featureKeys.every((key) => _initialCompleted[key] ?? false);
 
   @override
   Future<void> setInitialSyncCompleted(
@@ -277,7 +274,7 @@ class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
 }
 
 /// ------------------
-/// Helper: Simulate adding message from UI
+/// Helper: Add message from UI
 /// ------------------
 void addMessageFromUI(
     String text, List<LocalMessage> localDb, FeroSync feroSync) {
@@ -290,6 +287,6 @@ void addMessageFromUI(
   localDb.add(newMessage);
   print("✏️ User added message locally: ${newMessage.text}");
 
-  // Force sync this feature immediately
+  // Force immediate sync for this feature
   feroSync.syncFeature("messages", force: true);
 }
