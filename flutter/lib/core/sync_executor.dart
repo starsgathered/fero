@@ -85,6 +85,9 @@ class SyncExecutor {
       if (batchResult.checkpoint != null) {
         checkpoint = batchResult.checkpoint;
         onBatchComplete?.call(checkpoint);
+      } else {
+        // No checkpoint means pagination is complete
+        break;
       }
     }
   }
