@@ -238,17 +238,18 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
 /// In-Memory Metadata Repository
 /// ------------------
 class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
-  final Map<String, SyncCheckpoint?> _checkpoints = {};
+  final Map<String, SyncCheckpoint?> _initialCheckpoints = {};
   final Map<String, bool> _initialCompleted = {};
+  final Map<String, SyncCheckpoint?> _featureCheckpoints = {};
 
   @override
-  Future<SyncCheckpoint?> getCheckpoint(String featureKey) async =>
-      _checkpoints[featureKey];
+  Future<SyncCheckpoint?> getInitialSyncCheckpoint(String featureKey) async =>
+      _initialCheckpoints[featureKey];
 
   @override
-  Future<void> updateCheckpoint(
+  Future<void> updateInitialSyncCheckpoint(
           String featureKey, SyncCheckpoint? checkpoint) async =>
-      _checkpoints[featureKey] = checkpoint;
+      _initialCheckpoints[featureKey] = checkpoint;
 
   @override
   Future<bool> isInitialSyncCompleted(String featureKey) async =>
@@ -262,6 +263,15 @@ class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
   Future<void> setInitialSyncCompleted(
           String featureKey, bool completed) async =>
       _initialCompleted[featureKey] = completed;
+
+  @override
+  Future<SyncCheckpoint?> getFeatureSyncCheckpoint(String featureKey) async =>
+      _featureCheckpoints[featureKey];
+
+  @override
+  Future<void> updateFeatureSyncCheckpoint(
+          String featureKey, SyncCheckpoint? checkpoint) async =>
+      _featureCheckpoints[featureKey] = checkpoint;
 }
 
 /// ------------------
