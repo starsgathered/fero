@@ -137,23 +137,44 @@ class FeatureSyncManager {
   /// 1. Dependencies are satisfied
   /// 2. Highest priority among eligible features
   String? _getNextRunnableFeature() {
-    final eligible = _pendingQueue.where((feature) {
+    // Keeps track of features already considered to avoid cycles
+    final considered = <String>{};
+
+    String? findNext(String feature) {
+      if (considered.contains(feature)) return null;
+      considered.add(feature);
+
       final config = _featureConfigs[feature];
-      if (config == null) return false;
-      // All dependencies must be completed
-      return config.dependencies.every((dep) => _completedSync.contains(dep));
-    }).toList();
+      if (config == null) return null;
 
-    if (eligible.isEmpty) return null;
+      // Check dependencies first
+      for (final dep in config.dependencies) {
+        if (!_completedSync.contains(dep)) {
+          // If dependency is in pending queue, try running it first
+          if (_pendingQueue.contains(dep)) {
+            return findNext(dep);
+          }
+        }
+      }
 
-    // Sort by priority (highest first)
-    eligible.sort((a, b) {
-      final priorityA = _featureConfigs[a]?.priority ?? 0;
-      final priorityB = _featureConfigs[b]?.priority ?? 0;
-      return priorityB.compareTo(priorityA);
-    });
+      // All dependencies are either completed or not pending, this feature is runnable
+      return feature;
+    }
 
-    return eligible.first;
+    // Among pending, find the highest-priority runnable dependency chain
+    final sortedPending = _pendingQueue.toList()
+      ..sort((a, b) {
+        final priorityA = _featureConfigs[a]?.priority ?? 0;
+        final priorityB = _featureConfigs[b]?.priority ?? 0;
+        return priorityB.compareTo(priorityA);
+      });
+
+    for (final feature in sortedPending) {
+      final next = findNext(feature);
+      if (next != null) return next;
+    }
+
+    return null;
   }
 
   /// Perform incremental sync for a feature.
