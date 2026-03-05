@@ -184,8 +184,7 @@ class FeatureSyncManager {
       }
 
       // Get last synced checkpoint
-      final initialCheckpoint =
-          await metaRepo.getBackgroundSyncCheckpoint(featureKey);
+      final initialCheckpoint = await metaRepo.getCheckpoint(featureKey);
 
       // Execute paginated sync with conflict resolution
       await _executor.executePaginatedSync(
@@ -233,7 +232,9 @@ class FeatureSyncManager {
         },
         featureKey: featureKey,
         onBatchComplete: (checkpoint) async {
-          await metaRepo.updateBackgroundSyncCheckpoint(featureKey, checkpoint);
+          if (checkpoint != null) {
+            await metaRepo.updateCheckpoint(featureKey, checkpoint);
+          }
         },
         initialCheckpoint: initialCheckpoint,
       );
