@@ -49,3 +49,6 @@
 ## 0.4.7 - 2026-03-03
 
 - changed syncId to cursor
+- remove auto started incremental sync after initial sync
+- code cleanup and small improvements
+- updated checkpoint to support updates and delete events

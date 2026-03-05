@@ -8,6 +8,7 @@ import 'package:fero_sync/core/results/sync_batch_result.dart';
 import 'package:fero_sync/core/sync_metadata_repo.dart';
 import 'package:fero_sync/feature_sync/feature_sync_config.dart';
 import 'package:fero_sync/feature_sync/feature_sync_handler.dart';
+import 'package:fero_sync/initial_sync/enum/initial_sync_status.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 
@@ -15,10 +16,10 @@ import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 /// Entry Point
 /// ------------------
 Future<void> main() async {
-  // 1️⃣ Local in-memory "database"
+  // Local in-memory database
   final localDb = <LocalMessage>[];
 
-  // 2️⃣ Initialize FeroSync with initial + background sync configs
+  // Initialize FeroSync with initial and background sync handlers
   final feroSync = await FeroSync.create(
     metadataRepo: InMemorySyncMetaDataRepo(),
     initialSyncConfigs: {
@@ -33,20 +34,24 @@ Future<void> main() async {
     },
   );
 
-  // 3️⃣ Listen for initial sync status
+  // Listen for initial sync status
   feroSync.initialSyncNotifier.addListener(() {
     print("📊 Initial Sync Status: ${feroSync.initialSyncNotifier.value}");
+    if (feroSync.initialSyncNotifier.value == InitialSyncStatus.completed) {
+      print(
+          "✅ Initial sync completed! Local DB has ${localDb.length} messages.");
+    }
   });
 
-  // 4️⃣ Listen for background sync updates
+  // Only sync feature that need initial. if initial sync already completed, it will immediately update status notifier.
+  feroSync.startInitialSync();
+
+  // Listen for background/incremental sync updates
   feroSync.featureSyncNotifier("messages")?.addListener(() {
     print("📡 Background Sync Running...");
   });
 
-  // 5️⃣ Start syncing
-  await feroSync.startSync();
-
-  // 6️⃣ Example: Add a message from UI
+  // Simulate user adding a message
   addMessageFromUI("Hello, world!", localDb, feroSync);
 }
 

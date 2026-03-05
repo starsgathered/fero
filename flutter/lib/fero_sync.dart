@@ -55,7 +55,6 @@ class FeroSync {
   }
 
   /// Optional subscription to listen to events internally
-  bool _autoBackgroundSyncSetup = false; // Track if listener is already set up
   VoidCallback? _statusListener;
 
   /// Private constructor to enforce usage of the async factory `create`
@@ -126,31 +125,11 @@ class FeroSync {
       featureManager: featureManager,
     );
 
-    // Auto-start feature sync when initial sync completes (set up once)
-    if (featureManager != null) {
-      instance._setupAutoFeatureSync();
-    }
-
     return instance;
   }
 
-  /// Setup automatic feature sync trigger after initial sync completes
-  void _setupAutoFeatureSync() {
-    // Only set up listener once to avoid multiple triggers
-    if (_autoBackgroundSyncSetup) return;
-
-    _autoBackgroundSyncSetup = true;
-    _statusListener = () {
-      if (_initialManager.statusNotifier.value == InitialSyncStatus.completed) {
-        _featureManager?.syncAll();
-      }
-    };
-
-    _initialManager.statusNotifier.addListener(_statusListener!);
-  }
-
   /// Start listening to sync events
-  Future<void> startSync() async {
+  Future<void> startInitialSync() async {
     await _initialManager.run();
   }
 
