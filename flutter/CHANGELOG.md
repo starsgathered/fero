@@ -56,3 +56,7 @@
 ## 0.4.8 - 2026-03-05
 
 - Merge incremental and intial sync checkpoints
+
+## 0.4.9 - 2026-03-05
+
+- fix: queue error not getting next runnable

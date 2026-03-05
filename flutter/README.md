@@ -24,7 +24,7 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  fero_sync: ^0.4.7
+  fero_sync: ^0.4.9
 ```
 
 ---
