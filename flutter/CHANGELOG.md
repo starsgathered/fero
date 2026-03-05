@@ -52,3 +52,7 @@
 - remove auto started incremental sync after initial sync
 - code cleanup and small improvements
 - updated checkpoint to support updates and delete events
+
+## 0.4.8 - 2026-03-05
+
+- Merge incremental and intial sync checkpoints

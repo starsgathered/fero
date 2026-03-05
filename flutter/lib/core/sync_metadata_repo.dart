@@ -10,11 +10,11 @@ import 'package:fero_sync/core/models/sync_checkpoint.dart';
 /// depends on this abstraction, not concrete storage implementations.
 abstract class SyncMetaDataRepo {
   /// Returns the last checkpoint from the initial sync process for [featureKey].
-  Future<SyncCheckpoint?> getInitialSyncCheckpoint(String featureKey);
+  Future<SyncCheckpoint?> getCheckpoint(String featureKey);
 
   /// Updates the last checkpoint used by the initial sync process for [featureKey].
   /// This is kept separate from the background sync checkpoint to avoid conflicts.
-  Future<void> updateInitialSyncCheckpoint(
+  Future<void> updateCheckpoint(
     String featureKey,
     SyncCheckpoint? checkpoint,
   );
@@ -30,15 +30,4 @@ abstract class SyncMetaDataRepo {
 
   /// Sets the initial sync completed flag for [featureKey].
   Future<void> setInitialSyncCompleted(String featureKey, bool completed);
-
-  /// Returns the last checkpoint from a successful background sync for [featureKey].
-  /// Used for resumable, incremental syncing.
-  Future<SyncCheckpoint?> getFeatureSyncCheckpoint(String featureKey);
-
-  /// Updates the last checkpoint from a successful background sync for [featureKey].
-  /// Stores (lastUpdatedAt, lastItemId) for deterministic pagination.
-  Future<void> updateFeatureSyncCheckpoint(
-    String featureKey,
-    SyncCheckpoint? checkpoint,
-  );
 }
