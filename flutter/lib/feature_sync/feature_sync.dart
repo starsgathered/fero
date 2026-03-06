@@ -249,7 +249,7 @@ class FeatureSyncManager {
             return ApplyResult.success();
           }
 
-          return await handler.applyRemoteChanges(itemsToApply);
+          return await handler.resolvedToLocal(itemsToApply);
         },
         featureKey: featureKey,
         onBatchComplete: (checkpoint) async {

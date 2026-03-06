@@ -1,3 +1,5 @@
+import 'package:fero_sync/core/models/sync_payload.dart';
+import 'package:fero_sync/core/models/syncable.dart';
 import 'package:fero_sync/core/results/apply_error.dart';
 
 /// --- ApplyResult ---
@@ -6,22 +8,24 @@ import 'package:fero_sync/core/results/apply_error.dart';
 class ApplyResult {
   /// True if the operation succeeded
   final bool success;
+  final List<SyncPayload<LocalItem>> pushedItems;
 
   /// List of errors for failed items
   final List<ApplyError> errors;
 
   ApplyResult({
     required this.success,
+    required this.pushedItems,
     this.errors = const [],
   });
 
   /// Success factory
-  factory ApplyResult.success() {
-    return ApplyResult(success: true);
+  factory ApplyResult.success([List<SyncPayload<LocalItem>> pushedItems = const []]) {
+    return ApplyResult(success: true, pushedItems: pushedItems);
   }
 
   /// Failure factory
   factory ApplyResult.failure(List<ApplyError> errors) {
-    return ApplyResult(success: false, errors: errors);
+    return ApplyResult(success: false, errors: errors, pushedItems: []);
   }
 }

@@ -39,7 +39,7 @@ abstract class FeatureSyncHandler {
 
   /// Apply remote changes to local storage
   /// Returns success/failure with detailed errors
-  Future<ApplyResult> applyRemoteChanges(
+  Future<ApplyResult> resolvedToLocal(
       List<SyncPayload<ServerItem>> remoteStates);
 
   /// Fetch locally modified items that need to be synced

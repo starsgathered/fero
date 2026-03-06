@@ -270,7 +270,7 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
   }
 
   @override
-  Future<ApplyResult> applyRemoteChanges(
+  Future<ApplyResult> resolvedToLocal(
       List<SyncPayload<ServerItem>> remoteData) async {
     for (final payload in remoteData) {
       final server = payload.data as ServerMessage;
