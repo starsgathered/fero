@@ -12,14 +12,12 @@ import 'package:fero_sync/initial_sync/enum/initial_sync_status.dart';
 import 'package:fero_sync/initial_sync/initial_sync.dart';
 import 'package:fero_sync/initial_sync/initial_sync_handler.dart';
 
-/// ------------------
+/// ------------------------------------------------
 /// Entry Point
-/// ------------------
+/// ------------------------------------------------
 Future<void> main() async {
-  // Local in-memory database
   final localDb = <LocalMessage>[];
 
-  // Initialize FeroSync with initial and background sync handlers
   final feroSync = await FeroSync.create(
     metadataRepo: InMemorySyncMetaDataRepo(),
     initialSyncConfigs: {
@@ -34,36 +32,36 @@ Future<void> main() async {
     },
   );
 
-  // Listen for initial sync status
   feroSync.initialSyncNotifier.addListener(() {
     print("📊 Initial Sync Status: ${feroSync.initialSyncNotifier.value}");
+
     if (feroSync.initialSyncNotifier.value == InitialSyncStatus.completed) {
-      print(
-          "✅ Initial sync completed! Local DB has ${localDb.length} messages.");
+      print("✅ Initial Sync Finished");
+      print("Local messages count: ${localDb.length}");
     }
   });
 
-  // Only sync feature that need initial. if initial sync already completed, it will immediately update status notifier.
   feroSync.startInitialSync();
 
-  // Listen for background/incremental sync updates
   feroSync.featureSyncNotifier("messages")?.addListener(() {
     print("📡 Background Sync Running...");
   });
 
-  // Simulate user adding a message
-  addMessageFromUI("Hello, world!", localDb, feroSync);
+  addMessageFromUI("Hello from UI!", localDb, feroSync);
 }
 
-/// ------------------
-/// Local & Server Models
-/// ------------------
+/// ------------------------------------------------
+/// Local Model
+/// ------------------------------------------------
 class LocalMessage implements LocalItem {
   @override
   final String id;
+
   final String text;
+
   @override
   final int version;
+
   @override
   final bool locallyModified;
 
@@ -75,14 +73,21 @@ class LocalMessage implements LocalItem {
   });
 }
 
+/// ------------------------------------------------
+/// Server Model
+/// ------------------------------------------------
 class ServerMessage implements ServerItem {
   @override
   final String id;
+
   @override
   final BigInt syncId;
+
   final String text;
+
   @override
   final int version;
+
   @override
   final DateTime updatedAt;
 
@@ -95,9 +100,62 @@ class ServerMessage implements ServerItem {
   });
 }
 
-/// ------------------
+/// ------------------------------------------------
+/// Simulated SERVER DATABASE
+/// ------------------------------------------------
+class FakeServerDB {
+  final List<ServerMessage> _messages = [
+    ServerMessage(
+      id: "m1",
+      syncId: BigInt.from(1),
+      text: "Welcome 👋",
+      version: 1,
+      updatedAt: DateTime.parse("2024-01-01T00:00:00Z"),
+    ),
+    ServerMessage(
+      id: "m2",
+      syncId: BigInt.from(2),
+      text: "Hello from server!",
+      version: 1,
+      updatedAt: DateTime.parse("2024-01-01T00:01:00Z"),
+    ),
+    ServerMessage(
+      id: "m3",
+      syncId: BigInt.from(3),
+      text: "Another message",
+      version: 1,
+      updatedAt: DateTime.parse("2024-01-01T00:02:00Z"),
+    ),
+  ];
+
+  List<ServerMessage> fetchMessages({
+    SyncCheckpoint? checkpoint,
+    required int batchSize,
+  }) {
+    final startIndex = checkpoint == null
+        ? 0
+        : _messages.indexWhere((m) => m.syncId == checkpoint.lastSyncedId) + 1;
+
+    return _messages.skip(startIndex).take(batchSize).toList();
+  }
+
+  bool hasMore({
+    SyncCheckpoint? checkpoint,
+    required int fetchedCount,
+  }) {
+    final startIndex = checkpoint == null
+        ? 0
+        : _messages.indexWhere((m) => m.syncId == checkpoint.lastSyncedId) + 1;
+
+    return startIndex + fetchedCount < _messages.length;
+  }
+}
+
+final fakeServer = FakeServerDB();
+
+/// ------------------------------------------------
 /// Initial Sync Handler
-/// ------------------
+/// ------------------------------------------------
 class MessageInitialSyncHandler extends InitialSyncHandler {
   final List<LocalMessage> _localDb;
 
@@ -105,28 +163,22 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
 
   @override
   Future<SyncBatchResult> fetchRemoteData({
-    checkpoint,
+    SyncCheckpoint? checkpoint,
     required int batchSize,
   }) async {
-    print("🌍 Fetching messages from server...");
+    print("🌍 Initial Sync Fetch");
 
-    // Simulated server messages
-    final serverMessages = [
-      ServerMessage(
-        id: "m1",
-        syncId: BigInt.from(1),
-        text: "Welcome 👋",
-        version: 1,
-        updatedAt: DateTime.parse("2024-01-01T00:00:00Z"),
-      ),
-    ];
+    final items =
+        fakeServer.fetchMessages(checkpoint: checkpoint, batchSize: batchSize);
+
+    final hasMore = fakeServer.hasMore(
+      checkpoint: checkpoint,
+      fetchedCount: items.length,
+    );
 
     return SyncBatchResult.success(
-      items: serverMessages
-          .map((msg) => SyncPayload<ServerItem>(data: msg))
-          .toList(),
-      stopIfNoNextPage:
-          false, // if true then it will again run remote fetch after resolving conflicts
+      items: items.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
+      stopIfNoNextPage: !hasMore,
     );
   }
 
@@ -135,21 +187,25 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
       List<SyncPayload<ServerItem>> remoteData) async {
     for (final payload in remoteData) {
       final server = payload.data as ServerMessage;
-      _localDb.add(LocalMessage(
-        id: server.id,
-        text: server.text,
-        version: server.version,
-        locallyModified: false,
-      ));
+
+      _localDb.add(
+        LocalMessage(
+          id: server.id,
+          text: server.text,
+          version: server.version,
+        ),
+      );
     }
-    print("💾 Initial messages saved locally");
+
+    print("💾 Saved ${remoteData.length} messages locally");
+
     return ApplyResult.success();
   }
 }
 
-/// ------------------
-/// Feature (Background) Sync Handler
-/// ------------------
+/// ------------------------------------------------
+/// Feature Sync Handler
+/// ------------------------------------------------
 class MessageFeatureSyncHandler extends FeatureSyncHandler {
   final List<LocalMessage> _localDb;
 
@@ -163,17 +219,22 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
         .take(batchSize)
         .map((m) => SyncPayload<LocalItem>(data: m))
         .toList();
-    print("📤 Found ${modified.length} unsent messages");
+
+    print("📤 Found ${modified.length} local changes");
+
     return modified;
   }
 
   @override
   Future<ApplyResult> pushLocalChanges(
       [List<SyncPayload<LocalItem>>? localStates]) async {
-    print("🚀 Sending ${localStates?.length ?? 0} messages to server...");
+    print("🚀 Uploading ${localStates?.length ?? 0} messages");
+
     for (final payload in localStates ?? []) {
       final msg = payload.data as LocalMessage;
+
       final index = _localDb.indexWhere((e) => e.id == msg.id);
+
       if (index != -1) {
         _localDb[index] = LocalMessage(
           id: msg.id,
@@ -183,27 +244,28 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
         );
       }
     }
+
     return ApplyResult.success();
   }
 
   @override
-  Future<SyncBatchResult> fetchRemoteChanges(
-      {checkpoint, required int batchSize}) async {
-    print("🌍 Fetching new messages from server...");
-    final newMessages = [
-      ServerMessage(
-        id: "m2",
-        syncId: BigInt.from(2),
-        text: "Hello from server!",
-        version: 1,
-        updatedAt: DateTime.parse("2024-01-01T00:00:00Z"),
-      ),
-    ];
+  Future<SyncBatchResult> fetchRemoteChanges({
+    SyncCheckpoint? checkpoint,
+    required int batchSize,
+  }) async {
+    print("🌍 Fetching remote updates");
+
+    final items =
+        fakeServer.fetchMessages(checkpoint: checkpoint, batchSize: batchSize);
+
+    final hasMore = fakeServer.hasMore(
+      checkpoint: checkpoint,
+      fetchedCount: items.length,
+    );
 
     return SyncBatchResult.success(
-      items: newMessages.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
-      stopIfNoNextPage:
-          true, // if false then it will again run remote fetch after resolving conflicts
+      items: items.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
+      stopIfNoNextPage: !hasMore,
     );
   }
 
@@ -212,16 +274,20 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
       List<SyncPayload<ServerItem>> remoteData) async {
     for (final payload in remoteData) {
       final server = payload.data as ServerMessage;
+
       if (!_localDb.any((m) => m.id == server.id)) {
-        _localDb.add(LocalMessage(
-          id: server.id,
-          text: server.text,
-          version: server.version,
-          locallyModified: false,
-        ));
+        _localDb.add(
+          LocalMessage(
+            id: server.id,
+            text: server.text,
+            version: server.version,
+          ),
+        );
       }
     }
-    print("📥 Applied ${remoteData.length} new messages locally");
+
+    print("📥 Applied ${remoteData.length} remote messages");
+
     return ApplyResult.success();
   }
 
@@ -235,9 +301,9 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
   }
 }
 
-/// ------------------
-/// In-Memory Metadata Repository
-/// ------------------
+/// ------------------------------------------------
+/// Metadata Repo
+/// ------------------------------------------------
 class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
   final Map<String, SyncCheckpoint?> _checkpoints = {};
   final Map<String, bool> _initialCompleted = {};
@@ -265,9 +331,9 @@ class InMemorySyncMetaDataRepo implements SyncMetaDataRepo {
       _initialCompleted[featureKey] = completed;
 }
 
-/// ------------------
-/// Helper: Add message from UI
-/// ------------------
+/// ------------------------------------------------
+/// Simulate UI Message Creation
+/// ------------------------------------------------
 void addMessageFromUI(
     String text, List<LocalMessage> localDb, FeroSync feroSync) {
   final newMessage = LocalMessage(
@@ -276,9 +342,10 @@ void addMessageFromUI(
     version: 1,
     locallyModified: true,
   );
-  localDb.add(newMessage);
-  print("✏️ User added message locally: ${newMessage.text}");
 
-  // Force immediate sync for this feature
+  localDb.add(newMessage);
+
+  print("✏️ User created message: ${newMessage.text}");
+
   feroSync.syncFeature("messages", force: true);
 }
