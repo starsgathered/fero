@@ -70,6 +70,23 @@ addMessageFromUI("Hello, world!", localDb, feroSync);
 
 ---
 
+## Example
+
+A full working example is available inside the repository:
+
+[example/lib/main.dart](example/lib/main.dart)
+
+
+The example demonstrates:
+
+* Initial sync
+* Incremental feature sync
+* Local updates
+* Server push simulation
+* Conflict handling
+
+---
+
 ## Key Concepts
 
 * **Initial Sync**: Pulls full data for first-time setup.
