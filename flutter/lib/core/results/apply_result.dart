@@ -8,7 +8,7 @@ import 'package:fero_sync/core/results/apply_error.dart';
 class ApplyResult {
   /// True if the operation succeeded
   final bool success;
-  final List<SyncPayload<LocalItem>> pushedItems;
+  final List<SyncPayload<ServerItem>> pushedItems;
 
   /// List of errors for failed items
   final List<ApplyError> errors;
@@ -20,7 +20,7 @@ class ApplyResult {
   });
 
   /// Success factory
-  factory ApplyResult.success([List<SyncPayload<LocalItem>> pushedItems = const []]) {
+  factory ApplyResult.success([List<SyncPayload<ServerItem>> pushedItems = const []]) {
     return ApplyResult(success: true, pushedItems: pushedItems);
   }
 

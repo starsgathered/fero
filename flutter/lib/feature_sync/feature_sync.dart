@@ -202,8 +202,10 @@ class FeatureSyncManager {
           throw SyncFailedException(
               'Failed to push local changes: ${pushResult.errors}');
         }
+        if (pushResult.pushedItems.isNotEmpty) {
+          await handler.resolvedToLocal(pushResult.pushedItems);
+        }
       }
-
       // Get last synced checkpoint
       final initialCheckpoint = await metaRepo.getCheckpoint(featureKey);
 
