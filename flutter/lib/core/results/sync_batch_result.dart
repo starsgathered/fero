@@ -1,6 +1,5 @@
 import 'package:fero_sync/core/models/sync_payload.dart';
 import 'package:fero_sync/core/models/syncable.dart';
-import 'package:fero_sync/core/models/sync_checkpoint.dart';
 
 /// --- SyncBatchResult ---
 /// Result of fetching a batch of items from the server or local storage.
@@ -16,7 +15,7 @@ class SyncBatchResult {
   /// List of items in this batch
   final List<SyncPayload<ServerItem>> items;
 
-  final SyncCheckpoint? checkpoint;
+  bool stopIfNoNextPage = false;
 
   /// Error message if the operation failed
   final String? errorMessage;
@@ -24,19 +23,19 @@ class SyncBatchResult {
   SyncBatchResult({
     required this.success,
     this.items = const [],
-    this.checkpoint,
+    this.stopIfNoNextPage = false,
     this.errorMessage,
   });
 
   /// Success factory
   factory SyncBatchResult.success({
     required List<SyncPayload<ServerItem>> items,
-    SyncCheckpoint? checkpoint,
+    bool? stopIfNoNextPage,
   }) {
     return SyncBatchResult(
       success: true,
       items: items,
-      checkpoint: checkpoint,
+      stopIfNoNextPage: stopIfNoNextPage ?? false,
     );
   }
 

@@ -40,22 +40,19 @@ class SyncExecutor {
     SyncCheckpoint? checkpoint = initialCheckpoint;
 
     while (true) {
-      // Check cancellation
       if (isCancelled?.call() ?? false) {
         throw OperationCancelledException('Sync cancelled during pagination');
       }
 
       // Fetch batch with retry
-      final batchResult = await retryPolicy.attempt(
-        () async {
-          final result = await fetchBatch(checkpoint);
-          if (!result.success) {
-            throw SyncFailedException(
-                'Failed fetch batch: ${result.errorMessage ?? "unknown"}');
-          }
-          return result;
-        },
-      );
+      final batchResult = await retryPolicy.attempt(() async {
+        final result = await fetchBatch(checkpoint);
+        if (!result.success) {
+          throw SyncFailedException(
+              'Failed fetch batch: ${result.errorMessage ?? "unknown"}');
+        }
+        return result;
+      });
 
       if (batchResult == null) {
         throw MaxRetriesExceededException(
@@ -67,26 +64,35 @@ class SyncExecutor {
         throw OperationCancelledException('Sync cancelled after fetch');
       }
 
-      if (batchResult.items.isEmpty) {
-        // No more items to process, end pagination
-        break;
-      }
+      // Derive checkpoint
+      SyncCheckpoint? checkpointToReturn;
 
       // Apply batch if not empty
-      final applyResult = await applyBatch(batchResult.items);
-      if (!applyResult.success) {
-        throw SyncFailedException(
-          'Failed to apply batch for feature: $featureKey. '
-          'Errors: ${applyResult.errors.map((e) => e.message).join(', ')}',
+      if (batchResult.items.isNotEmpty) {
+        // Update from last item to ensure progress even if server checkpoint is same
+        final lastItem = batchResult.items.last.data;
+        checkpointToReturn = SyncCheckpoint(
+          lastSyncedId: lastItem.syncId,
+          lastSyncedAt: lastItem.updatedAt.toIso8601String(),
         );
+        final applyResult = await applyBatch(batchResult.items);
+        if (!applyResult.success) {
+          throw SyncFailedException(
+            'Failed to apply batch for feature: $featureKey. '
+            'Errors: ${applyResult.errors.map((e) => e.message).join(', ')}',
+          );
+        }
+      } else if (batchResult.stopIfNoNextPage) {
+        // No items: retain previous checkpoint
+        checkpointToReturn = checkpoint;
       }
 
-      // Update checkpoint after successful apply
-      if (batchResult.checkpoint != null) {
-        checkpoint = batchResult.checkpoint;
-        onBatchComplete?.call(checkpoint);
-      } else {
-        // No checkpoint means pagination is complete
+      // Update checkpoint
+      checkpoint = checkpointToReturn;
+      onBatchComplete?.call(checkpoint);
+
+      // Stop condition: no items AND no server checkpoint
+      if (batchResult.items.isEmpty || batchResult.stopIfNoNextPage) {
         break;
       }
     }

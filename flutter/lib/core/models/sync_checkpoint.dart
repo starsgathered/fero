@@ -18,6 +18,17 @@ class SyncCheckpoint {
       );
 
   @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SyncCheckpoint &&
+          runtimeType == other.runtimeType &&
+          lastSyncedId == other.lastSyncedId &&
+          lastSyncedAt == other.lastSyncedAt;
+
+  @override
+  int get hashCode => Object.hash(lastSyncedId, lastSyncedAt);
+
+  @override
   String toString() =>
       'SyncCheckpoint(lastSyncedId: $lastSyncedId, lastSyncedAt: $lastSyncedAt)';
 }

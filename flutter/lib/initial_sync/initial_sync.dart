@@ -132,9 +132,9 @@ class InitialSyncManager implements InitialSyncService {
         ),
         applyBatch: (items) => handler.saveToLocal(items),
         featureKey: featureKey,
-        onBatchComplete: (checkpoint) {
-          if (checkpoint != null) {
-            metaRepo.updateCheckpoint(featureKey, checkpoint);
+        onBatchComplete: (checkpoint) async {
+          if (checkpoint != null && checkpoint != initialCheckpoint) {
+            await metaRepo.updateCheckpoint(featureKey, checkpoint);
           }
         },
         isCancelled: () => _isCancelled,

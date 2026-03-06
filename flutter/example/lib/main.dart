@@ -125,10 +125,8 @@ class MessageInitialSyncHandler extends InitialSyncHandler {
       items: serverMessages
           .map((msg) => SyncPayload<ServerItem>(data: msg))
           .toList(),
-      checkpoint: SyncCheckpoint(
-        lastSyncedId: BigInt.from(1),
-        lastSyncedAt: "2024-01-01T00:00:00Z",
-      ), // last synced message info for next incremental fetches
+      stopIfNoNextPage:
+          false, // if true then it will again run remote fetch after resolving conflicts
     );
   }
 
@@ -204,10 +202,8 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
 
     return SyncBatchResult.success(
       items: newMessages.map((e) => SyncPayload<ServerItem>(data: e)).toList(),
-      checkpoint: SyncCheckpoint(
-        lastSyncedId: BigInt.from(2),
-        lastSyncedAt: "2024-01-01T00:00:00Z",
-      ), // last synced message info for next incremental fetches
+      stopIfNoNextPage:
+          true, // if false then it will again run remote fetch after resolving conflicts
     );
   }
 

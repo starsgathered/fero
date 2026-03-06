@@ -253,7 +253,7 @@ class FeatureSyncManager {
         },
         featureKey: featureKey,
         onBatchComplete: (checkpoint) async {
-          if (checkpoint != null) {
+          if (checkpoint != null && checkpoint != initialCheckpoint) {
             await metaRepo.updateCheckpoint(featureKey, checkpoint);
           }
         },
