@@ -37,11 +37,6 @@ abstract class FeatureSyncHandler {
     required int batchSize,
   });
 
-  /// Apply remote changes to local storage
-  /// Returns success/failure with detailed errors
-  Future<ApplyResult> resolvedToLocal(
-      List<SyncPayload<ServerItem>> remoteStates);
-
   /// Fetch locally modified items that need to be synced
   /// Returns items that have changed locally and need to be pushed to server
   Future<List<SyncPayload<LocalItem>>> getLocallyModifiedByIds({
@@ -53,6 +48,11 @@ abstract class FeatureSyncHandler {
   Future<List<SyncPayload<LocalItem>>> getLocallyModified({
     int batchSize = 50,
   });
+
+  /// Apply remote changes to local storage
+  /// Returns success/failure with detailed errors
+  Future<ApplyResult> applyRemoteChanges(
+      List<SyncPayload<ServerItem>> remoteStates);
 
   /// Push local changes to remote server
   /// Returns success/failure with detailed errors

@@ -203,7 +203,7 @@ class FeatureSyncManager {
               'Failed to push local changes: ${pushResult.errors}');
         }
         if (pushResult.pushedItems.isNotEmpty) {
-          await handler.resolvedToLocal(pushResult.pushedItems);
+          await handler.applyRemoteChanges(pushResult.pushedItems);
         }
       }
       // Get last synced checkpoint
@@ -251,7 +251,7 @@ class FeatureSyncManager {
             return ApplyResult.success();
           }
 
-          return await handler.resolvedToLocal(itemsToApply);
+          return await handler.applyRemoteChanges(itemsToApply);
         },
         featureKey: featureKey,
         onBatchComplete: (checkpoint) async {
