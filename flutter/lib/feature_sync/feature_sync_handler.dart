@@ -14,6 +14,8 @@ They are the main authority for ordering and conflict resolution.
 */
 import 'package:fero_sync/core/results/apply_result.dart';
 import 'package:fero_sync/core/results/push_local_changes.dart';
+import 'package:fero_sync/core/results/handle_push_results.dart';
+import 'package:fero_sync/core/results/push_results_input.dart';
 import 'package:fero_sync/core/results/sync_batch_result.dart';
 import 'package:fero_sync/core/models/sync_payload.dart';
 import 'package:fero_sync/core/models/syncable.dart';
@@ -59,4 +61,10 @@ abstract class FeatureSyncHandler {
   /// Returns success/failure with detailed errors
   Future<PushLocalChangesResult> pushLocalChanges(
       List<SyncPayload<LocalItem>> localStates);
+
+  /// Handle results of a push operation. Receives a minimal summary that
+  /// deliberately excludes conflict ids so handlers don't receive conflict
+  /// information directly.
+  Future<HandlePushResults> handlePushResults(
+      HandlePushResultsInput pushResults);
 }

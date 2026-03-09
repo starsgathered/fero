@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fero_sync/core/results/push_results_input.dart';
 import 'package:fero_sync/feature_sync/feature_sync_status.dart';
 import 'package:fero_sync/policies/backoff.dart';
 import 'package:fero_sync/core/conflict_resolution.dart';
@@ -198,10 +199,20 @@ class FeatureSyncManager {
         if (localBatch.isEmpty) break;
 
         final pushResult = await handler.pushLocalChanges(localBatch);
+
         if (!pushResult.hasSuccess) {
           throw SyncFailedException(
               'Failed to push local changes: ${pushResult.failedIds}');
         }
+        // Build a minimal summary (no conflict ids) for the handler
+        // so handlers don't receive conflict ids as input.
+        final summary = HandlePushResultsInput(
+          successIds: pushResult.successIds,
+          failedIds: pushResult.failedIds,
+        );
+
+        // Let the handler process the push summary (e.g. mark items as synced)
+        await handler.handlePushResults(summary);
       }
       // Get last synced checkpoint
       final initialCheckpoint = await metaRepo.getCheckpoint(featureKey);

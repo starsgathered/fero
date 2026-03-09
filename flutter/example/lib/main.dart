@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:fero_sync/core/results/push_local_changes.dart';
+import 'package:fero_sync/core/results/handle_push_results.dart';
+import 'package:fero_sync/core/results/push_results_input.dart';
 import 'package:fero_sync/fero_sync.dart';
 import 'package:fero_sync/core/models/sync_checkpoint.dart';
 import 'package:fero_sync/core/models/sync_payload.dart';
@@ -316,6 +318,15 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
     print("📥 Applied ${remoteData.length} remote messages");
 
     return ApplyResult.success();
+  }
+
+  @override
+  Future<HandlePushResults> handlePushResults(
+      HandlePushResultsInput pushResults) async {
+    return HandlePushResults(
+      markedSyncedIds: pushResults.successIds,
+      failedIds: pushResults.failedIds,
+    );
   }
 
   @override
