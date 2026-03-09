@@ -3,12 +3,10 @@ enum PushStatus { success, conflict, failed }
 class PushResultItem<T> {
   final String id;
   final PushStatus status;
-  final String? conflictReason;
 
   const PushResultItem({
     required this.id,
     required this.status,
-    this.conflictReason,
   });
 }
 

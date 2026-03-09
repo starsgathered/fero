@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:fero_sync/core/results/push_local_changes.dart';
 import 'package:fero_sync/fero_sync.dart';
 import 'package:fero_sync/core/models/sync_checkpoint.dart';
 import 'package:fero_sync/core/models/sync_payload.dart';
@@ -226,26 +227,52 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
   }
 
   @override
-  Future<ApplyResult> pushLocalChanges(
+  Future<PushLocalChangesResult<LocalItem>> pushLocalChanges(
       [List<SyncPayload<LocalItem>>? localStates]) async {
+    final results = <PushResultItem<LocalItem>>[];
+
     print("🚀 Uploading ${localStates?.length ?? 0} messages");
 
     for (final payload in localStates ?? []) {
       final msg = payload.data as LocalMessage;
 
-      final index = _localDb.indexWhere((e) => e.id == msg.id);
+      try {
+        final index = _localDb.indexWhere((e) => e.id == msg.id);
 
-      if (index != -1) {
+        if (index == -1) {
+          results.add(
+            PushResultItem(
+              id: msg.id,
+              status: PushStatus.failed,
+            ),
+          );
+          continue;
+        }
+
         _localDb[index] = LocalMessage(
           id: msg.id,
           text: msg.text,
           version: msg.version + 1,
           locallyModified: false,
         );
+
+        results.add(
+          PushResultItem(
+            id: msg.id,
+            status: PushStatus.success,
+          ),
+        );
+      } catch (e) {
+        results.add(
+          PushResultItem(
+            id: msg.id,
+            status: PushStatus.failed,
+          ),
+        );
       }
     }
 
-    return ApplyResult.success();
+    return PushLocalChangesResult(items: results);
   }
 
   @override

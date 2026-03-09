@@ -13,6 +13,7 @@ Versions are simple integers stored inside the payload.
 They are the main authority for ordering and conflict resolution.
 */
 import 'package:fero_sync/core/results/apply_result.dart';
+import 'package:fero_sync/core/results/push_local_changes.dart';
 import 'package:fero_sync/core/results/sync_batch_result.dart';
 import 'package:fero_sync/core/models/sync_payload.dart';
 import 'package:fero_sync/core/models/syncable.dart';
@@ -56,6 +57,6 @@ abstract class FeatureSyncHandler {
 
   /// Push local changes to remote server
   /// Returns success/failure with detailed errors
-  Future<ApplyResult> pushLocalChanges(
+  Future<PushLocalChangesResult> pushLocalChanges(
       List<SyncPayload<LocalItem>> localStates);
 }

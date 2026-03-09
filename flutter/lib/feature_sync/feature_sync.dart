@@ -198,9 +198,9 @@ class FeatureSyncManager {
         if (localBatch.isEmpty) break;
 
         final pushResult = await handler.pushLocalChanges(localBatch);
-        if (!pushResult.success) {
+        if (!pushResult.hasSuccess) {
           throw SyncFailedException(
-              'Failed to push local changes: ${pushResult.errors}');
+              'Failed to push local changes: ${pushResult.failedIds}');
         }
       }
       // Get last synced checkpoint
