@@ -7,19 +7,9 @@
 ///
 /// Designed to be small and extensible without over-engineering.
 class HandlePushResults {
-  final List<String> markedSyncedIds;
-  final List<String> conflictIds;
-  final List<String> failedIds;
-  final Map<String, dynamic> metadata;
+  final bool success;
 
   const HandlePushResults({
-    this.markedSyncedIds = const [],
-    this.conflictIds = const [],
-    this.failedIds = const [],
-    this.metadata = const {},
+    this.success = false,
   });
-
-  bool get hasMarkedSynced => markedSyncedIds.isNotEmpty;
-  bool get hasConflicts => conflictIds.isNotEmpty;
-  bool get hasFailures => failedIds.isNotEmpty;
 }

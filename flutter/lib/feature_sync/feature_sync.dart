@@ -212,7 +212,11 @@ class FeatureSyncManager {
         );
 
         // Let the handler process the push summary (e.g. mark items as synced)
-        await handler.handlePushResults(summary);
+        final pushHandledResults = await handler.handlePushResults(summary);
+        if (!pushHandledResults.success) {
+          throw SyncFailedException(
+              'Failed to handle push results: ${pushHandledResults.success}');
+        }
       }
       // Get last synced checkpoint
       final initialCheckpoint = await metaRepo.getCheckpoint(featureKey);

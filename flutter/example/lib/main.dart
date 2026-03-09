@@ -324,8 +324,7 @@ class MessageFeatureSyncHandler extends FeatureSyncHandler {
   Future<HandlePushResults> handlePushResults(
       HandlePushResultsInput pushResults) async {
     return HandlePushResults(
-      markedSyncedIds: pushResults.successIds,
-      failedIds: pushResults.failedIds,
+      success: true,
     );
   }
 
