@@ -32,7 +32,6 @@ class InitialSyncManager implements InitialSyncService {
 
   bool _isRunning = false;
   bool _isCancelled = false;
-  bool? _hasEverCompleted; // Track if full sync ever completed
 
   final ValueNotifier<InitialSyncStatus> statusNotifier =
       ValueNotifier(InitialSyncStatus.notStarted);
@@ -61,11 +60,10 @@ class InitialSyncManager implements InitialSyncService {
       throw SyncAlreadyRunningException('Initial sync already running');
     }
     final featuresToSync = _featureConfigs.keys.toList();
-    final allCompleted = _hasEverCompleted ??=
+    final allCompleted =
         await metaRepo.areAllInitialSyncsCompleted(featuresToSync);
     if (allCompleted) {
-      _hasEverCompleted = true;
-      _setStatus(InitialSyncStatus.completed);
+      _setStatus(InitialSyncStatus.alreadyCompleted);
       return;
     }
     _isRunning = true;
@@ -83,7 +81,6 @@ class InitialSyncManager implements InitialSyncService {
       }
 
       // Only emit FullInitialSyncCompletedEvent if this is the first time completing
-      _hasEverCompleted = true;
       _setStatus(InitialSyncStatus.completed);
     } catch (e) {
       if (!_isCancelled) {
@@ -106,14 +103,12 @@ class InitialSyncManager implements InitialSyncService {
         );
       }
       final handler = config.handler;
-      if (_hasEverCompleted == true) {
-        // If full sync already completed before, skip to avoid redundant work
-        _setStatus(InitialSyncStatus.completed);
-        return;
-      }
+
       // If initial sync was already completed for this feature, skip it.
       final alreadyInitial = await metaRepo.isInitialSyncCompleted(featureKey);
       if (alreadyInitial) {
+        // If full sync already completed before, skip to avoid redundant work
+        _setStatus(InitialSyncStatus.alreadyCompleted);
         return;
       }
 
@@ -161,7 +156,6 @@ class InitialSyncManager implements InitialSyncService {
     statusNotifier.dispose();
     _isRunning = false;
     _isCancelled = false;
-    _hasEverCompleted = null;
   }
 
   void _setStatus(InitialSyncStatus status) {
