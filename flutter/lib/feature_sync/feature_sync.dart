@@ -280,9 +280,26 @@ class FeatureSyncManager {
       featureStatus.fail(e.toString());
     } finally {
       _runningSync.remove(featureKey);
-      _activeSync--;
+      if (_activeSync > 0) _activeSync--;
       _processPending();
     }
+  }
+
+  /// Clears the sync state, including all queues and counters.
+  /// Useful for restarting a sync cycle from scratch.
+  ///
+  /// Note: Does not cancel in-flight async operations — those will
+  /// complete but their state updates will be discarded gracefully
+  /// since [_runningSync] and [_activeSync] are cleared.
+  void resetSyncState() {
+    if (_disposed) return;
+
+    _pendingQueue.clear();
+    _completedSync.clear();
+    _runningSync.clear();
+    _activeSync = 0;
+
+    _featureStatuses.clear();
   }
 
   void dispose() {

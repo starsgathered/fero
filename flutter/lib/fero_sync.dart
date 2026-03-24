@@ -149,6 +149,16 @@ class FeroSync {
     _initialManager.cancel();
   }
 
+  /// Clear sync state across both initial and feature sync managers.
+  /// - Clears all queues, running, and completed sets
+  ///
+  /// Use this on logout, fatal errors, or when a full re-sync is needed.
+  Future<void> reset({
+    bool clearCheckpoints = true,
+  }) async {
+    _featureManager?.resetSyncState();
+  }
+
   /// Dispose resources when the FeroSync instance is no longer needed
   void dispose() {
     if (_statusListener != null) {
